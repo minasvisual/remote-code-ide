@@ -14,7 +14,7 @@ interface ContextMenuState {
 }
 
 export function ConnectionManager() {
-  const { connections, connect, deleteConnection, isConnecting } = useApp()
+  const { connections, connect, disconnect, deleteConnection, isConnecting, activeSession } = useApp()
   const [showForm, setShowForm] = useState(false)
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
@@ -58,31 +58,35 @@ export function ConnectionManager() {
           </div>
         ) : (
           <ul className="py-1">
-            {connections.map((conn) => (
-              <li
-                key={conn.id}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-ide-hover group"
-                onContextMenu={(e) => handleContextMenu(e, conn)}
-              >
-                <span className="text-ide-accent text-sm">⚡</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-ide-text truncate">{conn.label}</p>
-                  <p className="text-xs text-ide-text-muted truncate">
-                    {conn.username}@{conn.host}:{conn.port}
-                  </p>
-                </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    size="sm"
-                    onClick={() => handleConnect(conn.id)}
-                    disabled={isConnecting}
-                    title="Connect"
-                  >
-                    {connectingId === conn.id ? <Spinner size="sm" /> : 'Connect'}
-                  </Button>
-                </div>
-              </li>
-            ))}
+            {connections.map((conn) => {
+              const isActive = activeSession?.connectionId === conn.id
+              const isBlocked = activeSession !== null && !isActive
+              return (
+                <li
+                  key={conn.id}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-ide-hover group"
+                  onContextMenu={(e) => handleContextMenu(e, conn)}
+                >
+                  <span className="text-ide-accent text-sm">⚡</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-ide-text truncate">{conn.label}</p>
+                    <p className="text-xs text-ide-text-muted truncate">
+                      {conn.username}@{conn.host}:{conn.port}
+                    </p>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      size="sm"
+                      onClick={isActive ? disconnect : () => handleConnect(conn.id)}
+                      disabled={isBlocked || isConnecting}
+                      title={isActive ? 'Disconnect' : 'Connect'}
+                    >
+                      {connectingId === conn.id ? <Spinner size="sm" /> : isActive ? 'Disconnect' : 'Connect'}
+                    </Button>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
