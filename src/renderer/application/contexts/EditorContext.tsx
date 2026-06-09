@@ -28,6 +28,7 @@ interface EditorContextValue {
   openFile(node: FileNode, sessionId: string): Promise<void>
   closeTab(tabId: string): void
   setActiveTab(tabId: string): void
+  cycleTab(delta: 1 | -1): void
   updateContent(tabId: string, content: string): void
   saveActiveFile(): Promise<void>
   isSaving: boolean
@@ -82,6 +83,14 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     [api, tabs, notify]
   )
 
+  const cycleTab = useCallback((delta: 1 | -1) => {
+    if (tabs.length < 2) return
+    const idx = tabs.findIndex((t) => t.id === activeTabId)
+    if (idx === -1) return
+    const nextIdx = (idx + delta + tabs.length) % tabs.length
+    setActiveTabId(tabs[nextIdx].id)
+  }, [tabs, activeTabId])
+
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId)
@@ -124,7 +133,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
   return (
     <EditorContext.Provider
-      value={{ tabs, activeTabId, openFile, closeTab, setActiveTab: setActiveTabId, updateContent, saveActiveFile, isSaving }}
+      value={{ tabs, activeTabId, openFile, closeTab, setActiveTab: setActiveTabId, cycleTab, updateContent, saveActiveFile, isSaving }}
     >
       {children}
     </EditorContext.Provider>

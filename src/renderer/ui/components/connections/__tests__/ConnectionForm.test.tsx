@@ -13,6 +13,7 @@ import { useApp } from '../../../../application/contexts/AppContext'
 
 const mockNotify = vi.fn()
 const mockSaveConnection = vi.fn()
+const mockUpdateConnection = vi.fn()
 const mockTestConnection = vi.fn()
 
 function baseUseApp() {
@@ -23,7 +24,7 @@ function baseUseApp() {
     isConnecting: false,
     loadConnections: vi.fn(),
     saveConnection: mockSaveConnection,
-    updateConnection: vi.fn(),
+    updateConnection: mockUpdateConnection,
     deleteConnection: vi.fn(),
     testConnection: mockTestConnection,
     connect: vi.fn(),
@@ -36,6 +37,7 @@ function baseUseApp() {
 beforeEach(() => {
   vi.mocked(useApp).mockReturnValue(baseUseApp())
   mockSaveConnection.mockResolvedValue(createMockConnection())
+  mockUpdateConnection.mockResolvedValue(createMockConnection())
   mockTestConnection.mockResolvedValue({ success: true, message: 'Connected' })
 })
 
@@ -43,6 +45,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   mockNotify.mockReset()
   mockSaveConnection.mockReset()
+  mockUpdateConnection.mockReset()
   mockTestConnection.mockReset()
 })
 
@@ -85,6 +88,33 @@ describe('ConnectionForm', () => {
     render(<ConnectionForm onClose={onClose} />)
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('renders Edit Connection title and pre-filled fields in edit mode', () => {
+    const conn = createMockConnection({ label: 'My Server', host: '10.0.0.1', username: 'admin', port: 22 })
+    render(<ConnectionForm connection={conn} onClose={vi.fn()} />)
+    expect(screen.getByText('Edit Connection')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('My Server')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('10.0.0.1')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('admin')).toBeInTheDocument()
+  })
+
+  it('credential fields start blank with placeholder in edit mode', () => {
+    const conn = createMockConnection()
+    render(<ConnectionForm connection={conn} onClose={vi.fn()} />)
+    expect(screen.getByPlaceholderText('Leave blank to keep current')).toBeInTheDocument()
+  })
+
+  it('calls updateConnection (not saveConnection) in edit mode', async () => {
+    const conn = createMockConnection({ label: 'My Server', host: '10.0.0.1', username: 'admin' })
+    const onClose = vi.fn()
+    render(<ConnectionForm connection={conn} onClose={onClose} />)
+    await userEvent.click(screen.getByRole('button', { name: /Save/i }))
+    await waitFor(() => {
+      expect(mockUpdateConnection).toHaveBeenCalled()
+      expect(mockSaveConnection).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
   })
 
   it('switches to private key auth when radio is selected', async () => {

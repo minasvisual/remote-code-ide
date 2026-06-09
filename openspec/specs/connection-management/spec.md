@@ -27,11 +27,19 @@ O sistema SHALL exibir a lista de todas as conexões cadastradas na sidebar ao i
 - **THEN** o painel exibe mensagem "No connections yet." e botão "Add Connection"
 
 ### Requirement: Deletar conexão
-O sistema SHALL permitir remover uma conexão da lista permanentemente.
+O sistema SHALL permitir remover uma conexão da lista permanentemente. A ação de exclusão SHALL ser acessível exclusivamente pelo menu de contexto (botão direito) e SHALL exigir confirmação digitada pelo usuário para prevenir exclusões acidentais.
 
-#### Scenario: Deletar conexão existente
-- **WHEN** o usuário clica no botão de deletar de uma conexão
+#### Scenario: Deletar conexão via menu de contexto com confirmação
+- **WHEN** o usuário seleciona "Delete" no menu de contexto e digita `excluir` no campo de confirmação e clica em "Delete"
 - **THEN** a conexão é removida da lista e do `electron-store`
+
+#### Scenario: Botão de confirmar exclusão desabilitado até texto correto
+- **WHEN** o modal de confirmação está aberto e o campo de texto não contém `excluir` (case-insensitive)
+- **THEN** o botão de confirmar exclusão está desabilitado
+
+#### Scenario: Cancelar exclusão não remove a conexão
+- **WHEN** o modal de confirmação está aberto e o usuário clica em "Cancel" ou pressiona Escape
+- **THEN** nenhuma ação de exclusão é executada e a conexão permanece na lista
 
 ### Requirement: Testar conexão antes de salvar
 O sistema SHALL permitir testar as credenciais de uma nova conexão sem precisar salvá-la primeiro.

@@ -4,20 +4,22 @@ import { Input } from '../commons/Input'
 import { Button } from '../commons/Button'
 import { Spinner } from '../commons/Spinner'
 import { useApp } from '../../../application/contexts/AppContext'
-import type { NewConnection } from '../../../domain/entities/Connection'
+import type { Connection, NewConnection } from '../../../domain/entities/Connection'
 
 interface Props {
+  connection?: Connection
   onClose(): void
 }
 
-export function ConnectionForm({ onClose }: Props) {
-  const { saveConnection, testConnection, notify } = useApp()
+export function ConnectionForm({ connection, onClose }: Props) {
+  const { saveConnection, updateConnection, testConnection, notify } = useApp()
+  const isEdit = !!connection
   const [form, setForm] = useState<NewConnection>({
-    label: '',
-    host: '',
-    port: 22,
-    username: '',
-    authType: 'password',
+    label: connection?.label ?? '',
+    host: connection?.host ?? '',
+    port: connection?.port ?? 22,
+    username: connection?.username ?? '',
+    authType: connection?.authType ?? 'password',
     plainPassword: '',
     plainPrivateKey: ''
   })
@@ -42,8 +44,23 @@ export function ConnectionForm({ onClose }: Props) {
     }
     setIsSaving(true)
     try {
-      await saveConnection(form)
-      notify('success', `Connection "${form.label}" saved`)
+      if (isEdit) {
+        const payload: Connection = {
+          ...connection,
+          label: form.label,
+          host: form.host,
+          port: form.port,
+          username: form.username,
+          authType: form.authType,
+        }
+        if (form.plainPassword) (payload as any).plainPassword = form.plainPassword
+        if (form.plainPrivateKey) (payload as any).plainPrivateKey = form.plainPrivateKey
+        await updateConnection(payload)
+        notify('success', `Connection "${form.label}" updated`)
+      } else {
+        await saveConnection(form)
+        notify('success', `Connection "${form.label}" saved`)
+      }
       onClose()
     } catch (err: unknown) {
       notify('error', (err as Error).message)
@@ -52,9 +69,11 @@ export function ConnectionForm({ onClose }: Props) {
     }
   }
 
+  const credPlaceholder = isEdit ? 'Leave blank to keep current' : undefined
+
   return (
     <Modal
-      title="New Connection"
+      title={isEdit ? 'Edit Connection' : 'New Connection'}
       onClose={onClose}
       footer={
         <>
@@ -97,7 +116,7 @@ export function ConnectionForm({ onClose }: Props) {
         </div>
 
         {form.authType === 'password' ? (
-          <Input label="Password" type="password" value={form.plainPassword ?? ''} onChange={(e) => set('plainPassword', e.target.value)} />
+          <Input label="Password" type="password" value={form.plainPassword ?? ''} onChange={(e) => set('plainPassword', e.target.value)} placeholder={credPlaceholder} />
         ) : (
           <div className="flex flex-col gap-1">
             <label className="text-xs text-ide-text-muted">Private Key (PEM content)</label>
@@ -105,7 +124,7 @@ export function ConnectionForm({ onClose }: Props) {
               value={form.plainPrivateKey ?? ''}
               onChange={(e) => set('plainPrivateKey', e.target.value)}
               rows={4}
-              placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+              placeholder={credPlaceholder ?? 'Paste your private key here'}
               className="bg-[#3c3c3c] border border-ide-border rounded px-2 py-1.5 text-xs text-ide-text font-mono placeholder-ide-text-muted focus:outline-none focus:border-ide-accent resize-none"
             />
           </div>

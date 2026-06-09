@@ -58,16 +58,26 @@ describe('ConnectionManager', () => {
     })
   })
 
-  it('calls delete API when delete button is clicked', async () => {
+  it('opens context menu on right-click of a connection', async () => {
+    const conn = createMockConnection({ label: 'My Server' })
+    mockApi.connections.list.mockResolvedValue([conn])
+    renderWithProviders(<ConnectionManager />)
+    await waitFor(() => expect(screen.getByText('My Server')).toBeInTheDocument())
+    await userEvent.pointer({ target: screen.getByText('My Server'), keys: '[MouseRight]' })
+    await waitFor(() => {
+      expect(screen.getByText('Edit')).toBeInTheDocument()
+      expect(screen.getByText('Delete')).toBeInTheDocument()
+    })
+  })
+
+  it('opens delete confirmation modal from context menu', async () => {
     const conn = createMockConnection({ id: 'conn-abc', label: 'My Server' })
     mockApi.connections.list.mockResolvedValue([conn])
     renderWithProviders(<ConnectionManager />)
-    await waitFor(() => {
-      expect(screen.getByText('My Server')).toBeInTheDocument()
-    })
-    await userEvent.click(screen.getByTitle('Delete'))
-    await waitFor(() => {
-      expect(mockApi.connections.delete).toHaveBeenCalledWith('conn-abc')
-    })
+    await waitFor(() => expect(screen.getByText('My Server')).toBeInTheDocument())
+    await userEvent.pointer({ target: screen.getByText('My Server'), keys: '[MouseRight]' })
+    await waitFor(() => expect(screen.getByText('Delete')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Delete'))
+    await waitFor(() => expect(screen.getByText('Delete Connection')).toBeInTheDocument())
   })
 })

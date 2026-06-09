@@ -12,10 +12,13 @@ import { TerminalPanel } from './ui/components/terminal/TerminalPanel'
 import { NotificationList } from './ui/components/commons/Notification'
 import { ExtensionsPanel } from './ui/components/extensions/ExtensionsPanel'
 import { useEditor } from './application/contexts/EditorContext'
+import { useKeyboardShortcuts } from './application/hooks/useKeyboardShortcuts'
 
 function IDELayout() {
   const { activeSession } = useApp()
-  const { tabs, activeTabId } = useEditor()
+  const { tabs, activeTabId, closeTab, cycleTab } = useEditor()
+
+  useKeyboardShortcuts({ closeTab, cycleTab, activeTabId })
   const [sidebarView, setSidebarView] = useState<string>(
     activeSession ? 'explorer' : 'connections'
   )

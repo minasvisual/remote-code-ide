@@ -2,17 +2,40 @@ import { useState } from 'react'
 import { Button } from '../commons/Button'
 import { Spinner } from '../commons/Spinner'
 import { ConnectionForm } from './ConnectionForm'
+import { ConnectionContextMenu } from './ConnectionContextMenu'
+import { DeleteConnectionModal } from './DeleteConnectionModal'
 import { useApp } from '../../../application/contexts/AppContext'
+import type { Connection } from '../../../domain/entities/Connection'
+
+interface ContextMenuState {
+  conn: Connection
+  x: number
+  y: number
+}
 
 export function ConnectionManager() {
   const { connections, connect, deleteConnection, isConnecting } = useApp()
   const [showForm, setShowForm] = useState(false)
   const [connectingId, setConnectingId] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [editingConn, setEditingConn] = useState<Connection | null>(null)
+  const [deletingConn, setDeletingConn] = useState<Connection | null>(null)
 
   const handleConnect = async (id: string) => {
     setConnectingId(id)
     await connect(id)
     setConnectingId(null)
+  }
+
+  const handleContextMenu = (e: React.MouseEvent, conn: Connection) => {
+    e.preventDefault()
+    setContextMenu({ conn, x: e.clientX, y: e.clientY })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deletingConn) return
+    await deleteConnection(deletingConn.id)
+    setDeletingConn(null)
   }
 
   return (
@@ -39,6 +62,7 @@ export function ConnectionManager() {
               <li
                 key={conn.id}
                 className="flex items-center gap-2 px-3 py-2 hover:bg-ide-hover group"
+                onContextMenu={(e) => handleContextMenu(e, conn)}
               >
                 <span className="text-ide-accent text-sm">⚡</span>
                 <div className="flex-1 min-w-0">
@@ -47,15 +71,7 @@ export function ConnectionManager() {
                     {conn.username}@{conn.host}:{conn.port}
                   </p>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteConnection(conn.id)}
-                    title="Delete"
-                  >
-                    🗑
-                  </Button>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button
                     size="sm"
                     onClick={() => handleConnect(conn.id)}
@@ -71,7 +87,26 @@ export function ConnectionManager() {
         )}
       </div>
 
+      {contextMenu && (
+        <ConnectionContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          connection={contextMenu.conn}
+          onEdit={() => setEditingConn(contextMenu.conn)}
+          onDelete={() => setDeletingConn(contextMenu.conn)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
       {showForm && <ConnectionForm onClose={() => setShowForm(false)} />}
+      {editingConn && <ConnectionForm connection={editingConn} onClose={() => setEditingConn(null)} />}
+      {deletingConn && (
+        <DeleteConnectionModal
+          connection={deletingConn}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeletingConn(null)}
+        />
+      )}
     </div>
   )
 }

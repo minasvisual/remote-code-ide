@@ -13,6 +13,8 @@ export function MonacoWrapper() {
   const { tabs, activeTabId, updateContent, saveActiveFile, isSaving } = useEditor()
   const monaco = useMonaco()
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null)
+  const saveActiveFileRef = useRef(saveActiveFile)
+  saveActiveFileRef.current = saveActiveFile
   const tab = tabs.find((t) => t.id === activeTabId)
 
   // Reuse Monaco models across tab switches to preserve undo history
@@ -33,10 +35,10 @@ export function MonacoWrapper() {
       editorRef.current = editor
       editor.addCommand(
         monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS,
-        () => saveActiveFile()
+        () => saveActiveFileRef.current()
       )
     },
-    [saveActiveFile]
+    []
   )
 
   const handleChange = useCallback(

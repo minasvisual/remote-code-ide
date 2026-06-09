@@ -43,7 +43,7 @@ beforeEach(() => {
   })
   vi.mocked(useEditor).mockReturnValue({
     tabs: [], activeTabId: null, openFile: mockOpenFile,
-    closeTab: vi.fn(), setActiveTab: vi.fn(), updateContent: vi.fn(),
+    closeTab: vi.fn(), setActiveTab: vi.fn(), cycleTab: vi.fn(), updateContent: vi.fn(),
     saveActiveFile: vi.fn(), isSaving: false,
   })
 })
