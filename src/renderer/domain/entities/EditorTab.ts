@@ -15,4 +15,5 @@ export type ActiveSession = {
   sessionId: string
   connectionId: string
   connectionLabel: string
+  initialDirectory?: string
 }

@@ -20,6 +20,7 @@ export function ConnectionForm({ connection, onClose }: Props) {
     port: connection?.port ?? 22,
     username: connection?.username ?? '',
     authType: connection?.authType ?? 'password',
+    initialDirectory: connection?.initialDirectory ?? '',
     plainPassword: '',
     plainPrivateKey: ''
   })
@@ -52,6 +53,7 @@ export function ConnectionForm({ connection, onClose }: Props) {
           port: form.port,
           username: form.username,
           authType: form.authType,
+          initialDirectory: form.initialDirectory || undefined,
         }
         if (form.plainPassword) (payload as any).plainPassword = form.plainPassword
         if (form.plainPrivateKey) (payload as any).plainPrivateKey = form.plainPrivateKey
@@ -95,6 +97,7 @@ export function ConnectionForm({ connection, onClose }: Props) {
           </div>
         </div>
         <Input label="Username" value={form.username} onChange={(e) => set('username', e.target.value)} placeholder="root" />
+        <Input label="Initial Directory" value={form.initialDirectory ?? ''} onChange={(e) => set('initialDirectory', e.target.value)} placeholder="/home/user/projects" />
 
         <div className="flex flex-col gap-1">
           <label className="text-xs text-ide-text-muted">Authentication</label>

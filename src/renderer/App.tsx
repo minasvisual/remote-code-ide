@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppProvider, useApp } from './application/contexts/AppContext'
 import { EditorProvider } from './application/contexts/EditorContext'
 import { ActivityBar } from './ui/components/layout/ActivityBar'
@@ -22,6 +22,10 @@ function IDELayout() {
   const [sidebarView, setSidebarView] = useState<string>(
     activeSession ? 'explorer' : 'connections'
   )
+
+  useEffect(() => {
+    if (activeSession) setSidebarView('explorer')
+  }, [activeSession?.sessionId])
   const [terminalOpen, setTerminalOpen] = useState(false)
 
   const hasActiveFile = tabs.some((t) => t.id === activeTabId)

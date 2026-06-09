@@ -98,7 +98,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setActiveSession({
           sessionId: result.sessionId,
           connectionId,
-          connectionLabel: connection.label
+          connectionLabel: connection.label,
+          initialDirectory: connection.initialDirectory
         })
         notify('success', `Connected to ${connection.label}`)
       } catch (err: unknown) {

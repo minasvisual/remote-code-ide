@@ -39,6 +39,10 @@ function createWindow(): void {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  if (process.env['OPEN_DEVTOOLS']) {
+    win.webContents.openDevTools()
+  }
 }
 
 function setupCsp(): void {

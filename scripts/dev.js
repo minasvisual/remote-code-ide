@@ -5,6 +5,10 @@
 // Electron context.
 delete process.env.ELECTRON_RUN_AS_NODE;
 
+if (process.argv.includes('--devtools')) {
+  process.env.OPEN_DEVTOOLS = '1';
+}
+
 const { spawn } = require('child_process');
 const path = require('path');
 

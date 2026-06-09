@@ -86,6 +86,87 @@ describe('FileExplorer', () => {
     })
   })
 
+  it('calls sftp.listDir with initialDirectory when set on the session', async () => {
+    vi.mocked(useApp).mockReturnValue({
+      activeSession: { ...mockSession, initialDirectory: '/home/user/projects' },
+      connections: [],
+      notifications: [],
+      isConnecting: false,
+      loadConnections: vi.fn(),
+      saveConnection: vi.fn(),
+      updateConnection: vi.fn(),
+      deleteConnection: vi.fn(),
+      testConnection: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      notify: vi.fn(),
+      dismissNotification: vi.fn(),
+    })
+    mockApi.sftp.listDir.mockResolvedValue([])
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => {
+      expect(mockApi.sftp.listDir).toHaveBeenCalledWith('sess-1', '/home/user/projects')
+    })
+  })
+
+  it('falls back to / when initialDirectory is not set on the session', async () => {
+    mockApi.sftp.listDir.mockResolvedValue([])
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => {
+      expect(mockApi.sftp.listDir).toHaveBeenCalledWith('sess-1', '/')
+    })
+  })
+
+  it('disconnects when listDir fails and initialDirectory is set', async () => {
+    const mockDisconnect = vi.fn()
+    const mockNotify = vi.fn()
+    vi.mocked(useApp).mockReturnValue({
+      activeSession: { ...mockSession, initialDirectory: '/bad/path' },
+      connections: [],
+      notifications: [],
+      isConnecting: false,
+      loadConnections: vi.fn(),
+      saveConnection: vi.fn(),
+      updateConnection: vi.fn(),
+      deleteConnection: vi.fn(),
+      testConnection: vi.fn(),
+      connect: vi.fn(),
+      disconnect: mockDisconnect,
+      notify: mockNotify,
+      dismissNotification: vi.fn(),
+    })
+    mockApi.sftp.listDir.mockRejectedValue(new Error('No such file or directory'))
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => {
+      expect(mockNotify).toHaveBeenCalledWith('error', expect.stringContaining('No such file or directory'))
+      expect(mockDisconnect).toHaveBeenCalled()
+    })
+  })
+
+  it('does not disconnect when listDir fails without initialDirectory', async () => {
+    const mockDisconnect = vi.fn()
+    vi.mocked(useApp).mockReturnValue({
+      activeSession: mockSession,
+      connections: [],
+      notifications: [],
+      isConnecting: false,
+      loadConnections: vi.fn(),
+      saveConnection: vi.fn(),
+      updateConnection: vi.fn(),
+      deleteConnection: vi.fn(),
+      testConnection: vi.fn(),
+      connect: vi.fn(),
+      disconnect: mockDisconnect,
+      notify: vi.fn(),
+      dismissNotification: vi.fn(),
+    })
+    mockApi.sftp.listDir.mockRejectedValue(new Error('Permission denied'))
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => {
+      expect(mockDisconnect).not.toHaveBeenCalled()
+    })
+  })
+
   it('renders nothing when there is no active session', () => {
     vi.mocked(useApp).mockReturnValue({
       activeSession: null,

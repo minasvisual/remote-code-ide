@@ -5,6 +5,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node scripts/dev.js",
+    "dev:console": "node scripts/dev.js --devtools",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist:win": "npm run build && electron-builder --win",

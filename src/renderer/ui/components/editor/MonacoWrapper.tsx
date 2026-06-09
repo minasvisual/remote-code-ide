@@ -17,9 +17,10 @@ export function MonacoWrapper() {
   saveActiveFileRef.current = saveActiveFile
   const tab = tabs.find((t) => t.id === activeTabId)
 
-  // Reuse Monaco models across tab switches to preserve undo history
+  // Reuse Monaco models across tab switches to preserve undo history.
+  // Guard on isLoading: the model must be created with real content, not the empty placeholder.
   useEffect(() => {
-    if (!editorRef.current || !monaco || !tab) return
+    if (!editorRef.current || !monaco || !tab || tab.isLoading) return
     const uri = monaco.Uri.parse(`remote://${tab.sessionId}${tab.remotePath}`)
     let model = monaco.editor.getModel(uri)
     if (!model) {
@@ -28,7 +29,7 @@ export function MonacoWrapper() {
     if (editorRef.current.getModel()?.uri.toString() !== uri.toString()) {
       editorRef.current.setModel(model)
     }
-  }, [tab?.id, monaco])
+  }, [tab?.id, tab?.isLoading, monaco])
 
   const handleMount = useCallback(
     (editor: MonacoType.editor.IStandaloneCodeEditor, monacoInstance: typeof MonacoType) => {
@@ -49,17 +50,15 @@ export function MonacoWrapper() {
   )
 
   if (!tab) return null
-  if (tab.isLoading) {
-    return <div className="flex items-center justify-center h-full"><Spinner /></div>
-  }
 
+  // Editor is always mounted to prevent Monaco's InstantiationService from being
+  // disposed mid-tab-switch. A loading overlay covers it while content is fetching.
   return (
     <div className="relative w-full h-full">
       <Editor
         height="100%"
-        language={tab.language}
-        value={tab.content}
         theme="vs-dark"
+        defaultValue=""
         onMount={handleMount}
         onChange={handleChange}
         options={{
@@ -87,6 +86,11 @@ export function MonacoWrapper() {
         }}
         loading={<div className="flex items-center justify-center h-full"><Spinner /></div>}
       />
+      {tab.isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-ide-bg z-10">
+          <Spinner />
+        </div>
+      )}
       {isSaving && (
         <div className="absolute top-2 right-4 bg-ide-sidebar/90 text-xs text-ide-text px-2 py-1 rounded flex items-center gap-1 z-10">
           <Spinner size="sm" /> Saving…

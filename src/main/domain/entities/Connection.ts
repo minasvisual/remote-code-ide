@@ -9,6 +9,7 @@ export interface Connection {
   authType: AuthType
   encryptedPassword?: string
   encryptedPrivateKey?: string
+  initialDirectory?: string
   createdAt: string
   updatedAt: string
 }

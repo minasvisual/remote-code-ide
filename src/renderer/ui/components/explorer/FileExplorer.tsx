@@ -7,7 +7,7 @@ import type { FileNode } from '../../../domain/entities/FileNode'
 
 export function FileExplorer() {
   const api = getRemoteApi()
-  const { activeSession, notify } = useApp()
+  const { activeSession, notify, disconnect } = useApp()
   const [rootNodes, setRootNodes] = useState<FileNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -15,10 +15,13 @@ export function FileExplorer() {
     if (!activeSession) return
     setIsLoading(true)
     try {
-      const nodes = await api.sftp.listDir(activeSession.sessionId, '/')
+      const nodes = await api.sftp.listDir(activeSession.sessionId, activeSession.initialDirectory || '/')
       setRootNodes(nodes)
     } catch (err: unknown) {
       notify('error', `Failed to load files: ${(err as Error).message}`)
+      if (activeSession.initialDirectory) {
+        disconnect()
+      }
     } finally {
       setIsLoading(false)
     }
