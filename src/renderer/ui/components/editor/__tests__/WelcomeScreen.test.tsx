@@ -5,7 +5,7 @@ import { WelcomeScreen } from '../WelcomeScreen'
 describe('WelcomeScreen', () => {
   it('renders app name', () => {
     render(<WelcomeScreen />)
-    expect(screen.getByText('MyCODEany')).toBeInTheDocument()
+    expect(screen.getByText('Remote Code IDE')).toBeInTheDocument()
   })
 
   it('renders instructional message', () => {

@@ -58,7 +58,7 @@
   },
   "build": {
     "appId": "com.mantovaniarts.mycodeany",
-    "productName": "MyCODEany",
+    "productName": "Remote Code IDE",
     "directories": {
       "output": "release"
     },
