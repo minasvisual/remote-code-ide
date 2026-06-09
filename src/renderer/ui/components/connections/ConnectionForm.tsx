@@ -1,0 +1,124 @@
+import { useState } from 'react'
+import { Modal } from '../commons/Modal'
+import { Input } from '../commons/Input'
+import { Button } from '../commons/Button'
+import { Spinner } from '../commons/Spinner'
+import { useApp } from '../../../application/contexts/AppContext'
+import type { NewConnection } from '../../../domain/entities/Connection'
+
+interface Props {
+  onClose(): void
+}
+
+export function ConnectionForm({ onClose }: Props) {
+  const { saveConnection, testConnection, notify } = useApp()
+  const [form, setForm] = useState<NewConnection>({
+    label: '',
+    host: '',
+    port: 22,
+    username: '',
+    authType: 'password',
+    plainPassword: '',
+    plainPrivateKey: ''
+  })
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+  const [testMessage, setTestMessage] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const set = (field: keyof NewConnection, value: string | number) =>
+    setForm((prev) => ({ ...prev, [field]: value }))
+
+  const handleTest = async () => {
+    setTestStatus('testing')
+    const result = await testConnection(form)
+    setTestStatus(result.success ? 'ok' : 'fail')
+    setTestMessage(result.message)
+  }
+
+  const handleSave = async () => {
+    if (!form.label || !form.host || !form.username) {
+      notify('error', 'Label, host and username are required')
+      return
+    }
+    setIsSaving(true)
+    try {
+      await saveConnection(form)
+      notify('success', `Connection "${form.label}" saved`)
+      onClose()
+    } catch (err: unknown) {
+      notify('error', (err as Error).message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="New Connection"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? <Spinner size="sm" /> : null} Save
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Input label="Label" value={form.label} onChange={(e) => set('label', e.target.value)} placeholder="My Server" />
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <Input label="Host" value={form.host} onChange={(e) => set('host', e.target.value)} placeholder="192.168.1.1" />
+          </div>
+          <div className="w-20">
+            <Input label="Port" type="number" value={form.port} onChange={(e) => set('port', Number(e.target.value))} />
+          </div>
+        </div>
+        <Input label="Username" value={form.username} onChange={(e) => set('username', e.target.value)} placeholder="root" />
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-ide-text-muted">Authentication</label>
+          <div className="flex gap-3">
+            {(['password', 'privateKey'] as const).map((type) => (
+              <label key={type} className="flex items-center gap-1.5 text-sm text-ide-text cursor-pointer">
+                <input
+                  type="radio"
+                  name="authType"
+                  value={type}
+                  checked={form.authType === type}
+                  onChange={() => set('authType', type)}
+                  className="accent-ide-accent"
+                />
+                {type === 'password' ? 'Password' : 'Private Key'}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {form.authType === 'password' ? (
+          <Input label="Password" type="password" value={form.plainPassword ?? ''} onChange={(e) => set('plainPassword', e.target.value)} />
+        ) : (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-ide-text-muted">Private Key (PEM content)</label>
+            <textarea
+              value={form.plainPrivateKey ?? ''}
+              onChange={(e) => set('plainPrivateKey', e.target.value)}
+              rows={4}
+              placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+              className="bg-[#3c3c3c] border border-ide-border rounded px-2 py-1.5 text-xs text-ide-text font-mono placeholder-ide-text-muted focus:outline-none focus:border-ide-accent resize-none"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handleTest} disabled={testStatus === 'testing'}>
+            {testStatus === 'testing' ? <Spinner size="sm" /> : null} Test Connection
+          </Button>
+          {testStatus === 'ok' && <span className="text-xs text-green-400">✓ {testMessage}</span>}
+          {testStatus === 'fail' && <span className="text-xs text-red-400">✗ {testMessage}</span>}
+        </div>
+      </div>
+    </Modal>
+  )
+}
