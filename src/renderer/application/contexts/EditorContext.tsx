@@ -66,7 +66,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setActiveTabId(loadingTab.id)
 
       try {
+        console.log(`[EditorContext] openFile → calling sftp:readFile session=${sessionId.slice(0, 8)} path=${node.path}`)
         const result = await api.sftp.readFile(sessionId, node.path)
+        console.log(`[EditorContext] openFile → sftp:readFile resolved, content length=${result.content.length}`)
         contentRef.current.set(loadingTab.id, result.content)
         setTabs((prev) =>
           prev.map((t) =>
@@ -76,6 +78,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
           )
         )
       } catch (err: unknown) {
+        console.error(`[EditorContext] openFile → sftp:readFile rejected:`, err)
         setTabs((prev) => prev.filter((t) => t.id !== loadingTab.id))
         notify('error', `Failed to open file: ${(err as Error).message}`)
       }

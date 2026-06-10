@@ -4,10 +4,10 @@ import type { ISshClient, SshConnectConfig, TestResult } from '../../domain/port
 
 export class Ssh2Client implements ISshClient {
   private sessions = new Map<string, Client>()
-  private onDisconnectedCallback?: (sessionId: string) => void
+  private onDisconnectedCallbacks: ((sessionId: string) => void)[] = []
 
   onDisconnected(cb: (sessionId: string) => void): void {
-    this.onDisconnectedCallback = cb
+    this.onDisconnectedCallbacks.push(cb)
   }
 
   async connect(config: SshConnectConfig): Promise<string> {
@@ -88,7 +88,7 @@ export class Ssh2Client implements ISshClient {
   private handleDisconnect(sessionId: string): void {
     if (this.sessions.has(sessionId)) {
       this.sessions.delete(sessionId)
-      this.onDisconnectedCallback?.(sessionId)
+      this.onDisconnectedCallbacks.forEach((cb) => cb(sessionId))
     }
   }
 }

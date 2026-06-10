@@ -1,11 +1,19 @@
 import { ipcMain } from 'electron'
-import { writeFileSync } from 'fs'
+import { writeFileSync, appendFileSync } from 'fs'
 import chardet from 'chardet'
 import type { ISftpService } from '../../domain/ports/ISftpService'
 import type { TempFileManager } from '../../adapters/temp/TempFileManager'
-import { basename } from 'path'
+import { basename, join } from 'path'
+import { tmpdir } from 'os'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const LOG_FILE = join(tmpdir(), 'mycodeany-debug.log')
+
+function log(msg: string): void {
+  const line = `[${new Date().toISOString()}] [IPC] ${msg}\n`
+  console.log(line.trim())
+  try { appendFileSync(LOG_FILE, line) } catch {}
+}
 
 export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager): void {
   ipcMain.handle('sftp:listDir', (_e, sessionId: string, path: string) =>
@@ -13,18 +21,24 @@ export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager):
   )
 
   ipcMain.handle('sftp:readFile', async (_e, sessionId: string, remotePath: string) => {
-    const nodes = await sftp.listDir(sessionId, remotePath.split('/').slice(0, -1).join('/') || '/')
-    const node = nodes.find((n) => n.path === remotePath)
+    log(`sftp:readFile received — session=${sessionId.slice(0, 8)} path=${remotePath}`)
 
-    if (node && node.size > MAX_FILE_SIZE) {
+    const buffer = await sftp.readFile(sessionId, remotePath).catch((err: Error) => {
+      log(`sftp:readFile failed — ${err.message}`)
+      throw err
+    })
+
+    log(`sftp:readFile — buffer ready, ${buffer.length} bytes`)
+
+    if (buffer.length > MAX_FILE_SIZE) {
       throw new Error(
-        `File is too large (${(node.size / 1024 / 1024).toFixed(1)} MB). Max allowed: 5 MB`
+        `File is too large (${(buffer.length / 1024 / 1024).toFixed(1)} MB). Max allowed: 5 MB`
       )
     }
 
-    const buffer = await sftp.readFile(sessionId, remotePath)
     const filename = basename(remotePath)
     const localTempPath = tempFiles.createTempPath(sessionId, filename)
+    log(`sftp:readFile — writing to temp: ${localTempPath}`)
 
     writeFileSync(localTempPath, buffer)
 
@@ -33,6 +47,7 @@ export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager):
       encoding.toLowerCase().replace('-', '') === 'utf8' ? 'utf8' : 'latin1'
     )
 
+    log(`sftp:readFile — done, encoding=${encoding}`)
     return { localTempPath, content }
   })
 

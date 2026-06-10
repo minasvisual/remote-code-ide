@@ -2,6 +2,7 @@
   "name": "mycodeany",
   "version": "0.1.0",
   "description": "Remote IDE Desktop App - SSH/SFTP with VSCode-powered editor",
+  "author": "Ulisses Mantovani <mantovaniarts@gmail.com>",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node scripts/dev.js",
@@ -59,6 +60,7 @@
   "build": {
     "appId": "com.mantovaniarts.mycodeany",
     "productName": "Remote Code IDE",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
@@ -68,16 +70,14 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "resources/icon.ico"
+      "sign": null
     },
     "mac": {
       "target": "dmg",
-      "icon": "resources/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "resources/icon.png",
       "category": "Development"
     }
   }

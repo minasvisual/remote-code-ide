@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session } from 'electron'
+import { app, BrowserWindow, session, globalShortcut } from 'electron'
 import { join } from 'path'
 import { SafeStorageCrypto } from './adapters/crypto/SafeStorageCrypto'
 import { ElectronStoreConnectionRepo } from './adapters/storage/ElectronStoreConnectionRepo'
@@ -43,6 +43,12 @@ function createWindow(): void {
   if (process.env['OPEN_DEVTOOLS']) {
     win.webContents.openDevTools()
   }
+
+  win.webContents.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      win.webContents.toggleDevTools()
+    }
+  })
 }
 
 function setupCsp(): void {

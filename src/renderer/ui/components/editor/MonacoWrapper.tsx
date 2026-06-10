@@ -1,17 +1,36 @@
 import { useEffect, useRef, useCallback } from 'react'
-import Editor, { useMonaco } from '@monaco-editor/react'
+import Editor, { useMonaco, loader } from '@monaco-editor/react'
+import * as monaco from 'monaco-editor'
 import type * as MonacoType from 'monaco-editor'
 import { useEditor } from '../../../application/contexts/EditorContext'
 import { Spinner } from '../commons/Spinner'
 
-// 'vscode' resolves to @codingame/monaco-vscode-api via package.json alias,
-// enabling VSCode extensions to use the full vscode API surface at runtime.
-// Service overrides are loaded lazily in src/renderer/application/vscode/setup.ts
-// when extensions are installed via the OpenVSX panel.
+// Workers must be imported as ?worker so Vite bundles them as blob: URLs.
+// This avoids CDN loading (which the CSP blocks in production).
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+
+// Set up MonacoEnvironment before loader.config so Monaco finds the workers.
+;(window as Window & { MonacoEnvironment?: unknown }).MonacoEnvironment = {
+  getWorker(_: string, label: string): Worker {
+    if (label === 'json') return new jsonWorker()
+    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker()
+    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker()
+    if (label === 'typescript' || label === 'javascript') return new tsWorker()
+    return new editorWorker()
+  }
+}
+
+// Tell @monaco-editor/react to use the already-bundled Monaco instance
+// instead of loading it dynamically from a CDN <script> tag.
+loader.config({ monaco })
 
 export function MonacoWrapper() {
   const { tabs, activeTabId, updateContent, saveActiveFile, isSaving } = useEditor()
-  const monaco = useMonaco()
+  const monacoInstance = useMonaco()
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null)
   const saveActiveFileRef = useRef(saveActiveFile)
   saveActiveFileRef.current = saveActiveFile
@@ -20,22 +39,22 @@ export function MonacoWrapper() {
   // Reuse Monaco models across tab switches to preserve undo history.
   // Guard on isLoading: the model must be created with real content, not the empty placeholder.
   useEffect(() => {
-    if (!editorRef.current || !monaco || !tab || tab.isLoading) return
-    const uri = monaco.Uri.parse(`remote://${tab.sessionId}${tab.remotePath}`)
-    let model = monaco.editor.getModel(uri)
+    if (!editorRef.current || !monacoInstance || !tab || tab.isLoading) return
+    const uri = monacoInstance.Uri.parse(`remote://${tab.sessionId}${tab.remotePath}`)
+    let model = monacoInstance.editor.getModel(uri)
     if (!model) {
-      model = monaco.editor.createModel(tab.content, tab.language, uri)
+      model = monacoInstance.editor.createModel(tab.content, tab.language, uri)
     }
     if (editorRef.current.getModel()?.uri.toString() !== uri.toString()) {
       editorRef.current.setModel(model)
     }
-  }, [tab?.id, tab?.isLoading, monaco])
+  }, [tab?.id, tab?.isLoading, monacoInstance])
 
   const handleMount = useCallback(
-    (editor: MonacoType.editor.IStandaloneCodeEditor, monacoInstance: typeof MonacoType) => {
+    (editor: MonacoType.editor.IStandaloneCodeEditor, monacoArg: typeof MonacoType) => {
       editorRef.current = editor
       editor.addCommand(
-        monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS,
+        monacoArg.KeyMod.CtrlCmd | monacoArg.KeyCode.KeyS,
         () => saveActiveFileRef.current()
       )
     },
