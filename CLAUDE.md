@@ -1,4 +1,4 @@
-# MyCODEany — Agent Guide
+# RemoteCodeIDE — Agent Guide
 
 Remote IDE desktop app: SSH/SFTP connections + Monaco editor + integrated terminal.
 Similar to Codeanywhere / RemoteSSH.

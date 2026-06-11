@@ -33,7 +33,7 @@ async function collectUploadEntries(
   }
   return entries
 }
-const LOG_FILE = join(tmpdir(), 'mycodeany-debug.log')
+const LOG_FILE = join(tmpdir(), 'remotecodeide-debug.log')
 
 function log(msg: string): void {
   const line = `[${new Date().toISOString()}] [IPC] ${msg}\n`

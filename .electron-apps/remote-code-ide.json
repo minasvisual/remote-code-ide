@@ -1,0 +1,28 @@
+{
+  "slug": "remote-code-ide",
+  "name": "Remote Code IDE",
+  "description": "Remote IDE desktop app with SSH/SFTP connections, Monaco editor (VS Code engine), and integrated terminal. Connect to any server and edit files as if they were local.",
+  "website": "https://github.com/minasvisual/remote-code-ide",
+  "repository": "https://github.com/minasvisual/remote-code-ide",
+  "license": "MIT",
+  "version": "0.1.0",
+  "icon": "https://raw.githubusercontent.com/minasvisual/remote-code-ide/main/resources/icons/icon.png",
+  "screenshots": [],
+  "keywords": [
+    "ssh",
+    "sftp",
+    "remote",
+    "ide",
+    "monaco",
+    "editor",
+    "terminal",
+    "developer-tools"
+  ],
+  "category": "Developer Tools",
+  "supportedLanguages": ["en-US"],
+  "platforms": {
+    "win32": true,
+    "darwin": true,
+    "linux": true
+  }
+}

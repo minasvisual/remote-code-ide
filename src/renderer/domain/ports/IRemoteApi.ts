@@ -57,4 +57,9 @@ export interface IRemoteApi {
     close(termId: string): Promise<void>
     onOutput(cb: (termId: string, data: string) => void): void
   }
+  versions: {
+    node: string
+    electron: string
+    chrome: string
+  }
 }

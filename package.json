@@ -1,8 +1,26 @@
 {
-  "name": "mycodeany",
+  "name": "RemoteCodeIDE",
   "version": "0.1.0",
-  "description": "Remote IDE Desktop App - SSH/SFTP with VSCode-powered editor",
+  "description": "Remote IDE desktop app with SSH/SFTP connections, Monaco editor, and integrated terminal. Similar to Codeanywhere and VS Code Remote SSH.",
   "author": "Ulisses Mantovani <mantovaniarts@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/minasvisual/remote-code-ide",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/minasvisual/remote-code-ide.git"
+  },
+  "keywords": [
+    "electron",
+    "ssh",
+    "sftp",
+    "remote",
+    "ide",
+    "monaco",
+    "editor",
+    "developer-tools",
+    "remote-development",
+    "terminal"
+  ],
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node scripts/dev.js",
@@ -58,8 +76,9 @@
     "vscode-ws-jsonrpc": "^3.5.0"
   },
   "build": {
-    "appId": "com.mantovaniarts.mycodeany",
+    "appId": "com.mantovaniarts.remotecodeide",
     "productName": "Remote Code IDE",
+    "icon": "resources/icons/icon",
     "npmRebuild": false,
     "directories": {
       "output": "release"
@@ -70,14 +89,17 @@
     ],
     "win": {
       "target": "nsis",
+      "icon": "resources/icons/icon.ico",
       "sign": null
     },
     "mac": {
       "target": "dmg",
+      "icon": "resources/icons/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
       "target": "AppImage",
+      "icon": "resources/icons/",
       "category": "Development"
     }
   }

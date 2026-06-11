@@ -6,7 +6,7 @@ import { appendFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-const LOG_FILE = join(tmpdir(), 'mycodeany-debug.log')
+const LOG_FILE = join(tmpdir(), 'remotecodeide-debug.log')
 
 function log(msg: string): void {
   const line = `[${new Date().toISOString()}] [SFTP] ${msg}\n`

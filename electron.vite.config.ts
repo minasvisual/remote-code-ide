@@ -15,6 +15,9 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0')
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer')

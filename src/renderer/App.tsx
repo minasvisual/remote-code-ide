@@ -11,6 +11,7 @@ import { WelcomeScreen } from './ui/components/editor/WelcomeScreen'
 import { TerminalPanel } from './ui/components/terminal/TerminalPanel'
 import { NotificationList } from './ui/components/commons/Notification'
 import { ExtensionsPanel } from './ui/components/extensions/ExtensionsPanel'
+import { AboutPanel } from './ui/components/about/AboutPanel'
 import { useEditor } from './application/contexts/EditorContext'
 import { useKeyboardShortcuts } from './application/hooks/useKeyboardShortcuts'
 
@@ -38,7 +39,9 @@ function IDELayout() {
 
         {/* Sidebar */}
         <div className="w-60 bg-ide-sidebar border-r border-ide-border shrink-0 flex flex-col overflow-hidden">
-          {sidebarView === 'extensions' ? (
+          {sidebarView === 'about' ? (
+            <AboutPanel />
+          ) : sidebarView === 'extensions' ? (
             <ExtensionsPanel />
           ) : sidebarView === 'connections' || !activeSession ? (
             <ConnectionManager />

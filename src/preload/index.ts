@@ -50,6 +50,11 @@ const api: IRemoteApi = {
     onOutput: (cb) => {
       ipcRenderer.on('terminal:output', (_e, termId, data) => cb(termId, data))
     }
+  },
+  versions: {
+    node: process.versions.node,
+    electron: process.versions.electron ?? '',
+    chrome: process.versions.chrome ?? ''
   }
 }
 

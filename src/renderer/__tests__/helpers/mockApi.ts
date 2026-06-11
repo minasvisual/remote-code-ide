@@ -50,5 +50,10 @@ export function createMockApi(): IRemoteApi {
       close: vi.fn().mockResolvedValue(undefined),
       onOutput: vi.fn(),
     },
+    versions: {
+      node: '20.0.0',
+      electron: '29.0.0',
+      chrome: '122.0.0',
+    },
   }
 }

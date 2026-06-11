@@ -16,6 +16,12 @@ const sshClient = new Ssh2Client()
 const sftpService = new Ssh2SftpService(sshClient)
 const tempFiles = new TempFileManager()
 
+function resolveIcon(): string {
+  const base = app.isPackaged ? app.getAppPath() : join(__dirname, '../..')
+  const ext = process.platform === 'win32' ? 'ico' : 'png'
+  return join(base, 'resources', 'icons', `icon.${ext}`)
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -23,6 +29,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     frame: true,
+    icon: resolveIcon(),
     backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
