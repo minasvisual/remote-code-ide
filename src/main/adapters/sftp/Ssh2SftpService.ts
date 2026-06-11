@@ -198,4 +198,65 @@ export class Ssh2SftpService implements ISftpService {
       })
     })
   }
+
+  async createFile(sessionId: string, path: string): Promise<void> {
+    log(`createFile(${sessionId.slice(0, 8)}, ${path})`)
+    const sftp = await this.getSftp(sessionId)
+    await new Promise<void>((resolve, reject) => {
+      sftp.stat(path, (err) => {
+        if (!err) {
+          const exists = Object.assign(new Error('File already exists'), { code: 'FILE_EXISTS' })
+          reject(exists)
+        } else {
+          resolve()
+        }
+      })
+    })
+    return new Promise((resolve, reject) => {
+      const stream = sftp.createWriteStream(path)
+      stream.on('close', () => { log(`createFile close — done`); resolve() })
+      stream.on('error', (err: Error) => { log(`createFile error: ${err.message}`); reject(err) })
+      stream.end(Buffer.alloc(0))
+    })
+  }
+
+  async uploadFile(sessionId: string, remotePath: string, content: Buffer): Promise<void> {
+    return this.writeFile(sessionId, remotePath, content)
+  }
+
+  async mkdirp(sessionId: string, path: string): Promise<void> {
+    const parts = path.split('/').filter(Boolean)
+    let current = ''
+    for (const part of parts) {
+      current += '/' + part
+      try {
+        await this.mkdir(sessionId, current)
+      } catch (err: unknown) {
+        const e = err as { code?: string | number; message?: string }
+        const msg = String(e.message ?? '').toLowerCase()
+        if (e.code !== 4 && !msg.includes('exist') && !msg.includes('eexist')) {
+          throw err
+        }
+      }
+    }
+  }
+
+  async deleteRecursive(sessionId: string, path: string): Promise<void> {
+    log(`deleteRecursive(${sessionId.slice(0, 8)}, ${path})`)
+    const entries = await this.listDir(sessionId, path)
+    for (const entry of entries) {
+      if (entry.type === 'directory') {
+        await this.deleteRecursive(sessionId, entry.path)
+      } else {
+        await this.delete(sessionId, entry.path)
+      }
+    }
+    const sftp = await this.getSftp(sessionId)
+    await new Promise<void>((resolve, reject) => {
+      sftp.rmdir(path, (err) => {
+        if (err) { log(`deleteRecursive rmdir error: ${err.message}`); reject(err) }
+        else resolve()
+      })
+    })
+  }
 }

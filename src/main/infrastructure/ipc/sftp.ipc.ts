@@ -1,12 +1,38 @@
-import { ipcMain } from 'electron'
-import { writeFileSync, appendFileSync } from 'fs'
+import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { writeFileSync, appendFileSync, promises as fsp } from 'fs'
 import chardet from 'chardet'
 import type { ISftpService } from '../../domain/ports/ISftpService'
 import type { TempFileManager } from '../../adapters/temp/TempFileManager'
-import { basename, join } from 'path'
+import { basename, join, dirname, relative } from 'path'
 import { tmpdir } from 'os'
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+
+interface UploadProgressPayload {
+  localPath: string
+  remoteName: string
+  status: 'pending' | 'uploading' | 'done' | 'error'
+  error?: string
+}
+
+async function collectUploadEntries(
+  localPath: string,
+  base: string
+): Promise<Array<{ filePath: string; relativePath: string }>> {
+  const entries: Array<{ filePath: string; relativePath: string }> = []
+  const stack = [localPath]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    const stat = await fsp.stat(current)
+    if (stat.isDirectory()) {
+      const names = await fsp.readdir(current)
+      for (const name of names) stack.push(join(current, name))
+    } else {
+      entries.push({ filePath: current, relativePath: relative(base, current).replace(/\\/g, '/') })
+    }
+  }
+  return entries
+}
 const LOG_FILE = join(tmpdir(), 'mycodeany-debug.log')
 
 function log(msg: string): void {
@@ -69,5 +95,66 @@ export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager):
 
   ipcMain.handle('sftp:delete', (_e, sessionId: string, path: string) =>
     sftp.delete(sessionId, path)
+  )
+
+  ipcMain.handle('sftp:deleteRecursive', (_e, sessionId: string, path: string) =>
+    sftp.deleteRecursive(sessionId, path)
+  )
+
+  ipcMain.handle('sftp:createFile', async (_e, sessionId: string, path: string) => {
+    try {
+      await sftp.createFile(sessionId, path)
+      return { success: true }
+    } catch (err: unknown) {
+      const e = err as { code?: string; message: string }
+      return { success: false, code: e.code, error: e.message }
+    }
+  })
+
+  ipcMain.handle('sftp:openUploadDialog', async (_e, mode: 'files' | 'folder') => {
+    const win = BrowserWindow.fromWebContents(_e.sender) ?? BrowserWindow.getFocusedWindow()
+    if (!win) return null
+    const properties: Electron.OpenDialogOptions['properties'] =
+      mode === 'folder'
+        ? ['openDirectory', 'multiSelections']
+        : ['openFile', 'multiSelections']
+    const result = await dialog.showOpenDialog(win, { properties })
+    return result.canceled ? null : result.filePaths
+  })
+
+  ipcMain.handle(
+    'sftp:uploadFiles',
+    async (_e, { sessionId, targetDir, localPaths }: { sessionId: string; targetDir: string; localPaths: string[] }) => {
+      const sender = _e.sender
+      const sendProgress = (payload: UploadProgressPayload) => {
+        try { sender.send('sftp:uploadProgress', payload) } catch {}
+      }
+
+      const allEntries: Array<{ filePath: string; relativePath: string }> = []
+      for (const localPath of localPaths) {
+        const base = dirname(localPath)
+        const entries = await collectUploadEntries(localPath, base)
+        allEntries.push(...entries)
+      }
+
+      for (const { filePath, relativePath } of allEntries) {
+        sendProgress({ localPath: filePath, remoteName: relativePath, status: 'pending' })
+      }
+
+      for (const { filePath, relativePath } of allEntries) {
+        const remotePath = targetDir === '/' ? `/${relativePath}` : `${targetDir}/${relativePath}`
+        const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/')) || '/'
+        sendProgress({ localPath: filePath, remoteName: relativePath, status: 'uploading' })
+        try {
+          await sftp.mkdirp(sessionId, remoteDir)
+          const content = await fsp.readFile(filePath)
+          await sftp.writeFile(sessionId, remotePath, content)
+          sendProgress({ localPath: filePath, remoteName: relativePath, status: 'done' })
+        } catch (err: unknown) {
+          const error = (err as Error).message
+          sendProgress({ localPath: filePath, remoteName: relativePath, status: 'error', error })
+        }
+      }
+    }
   )
 }

@@ -17,6 +17,13 @@ export interface ReadFileResult {
   content: string
 }
 
+export interface UploadProgressEvent {
+  localPath: string
+  remoteName: string
+  status: 'pending' | 'uploading' | 'done' | 'error'
+  error?: string
+}
+
 export interface IRemoteApi {
   connections: {
     list(): Promise<Connection[]>
@@ -37,6 +44,11 @@ export interface IRemoteApi {
     rename(sessionId: string, oldPath: string, newPath: string): Promise<void>
     mkdir(sessionId: string, path: string): Promise<void>
     delete(sessionId: string, path: string): Promise<void>
+    deleteRecursive(sessionId: string, path: string): Promise<void>
+    createFile(sessionId: string, path: string): Promise<void>
+    openUploadDialog(mode: 'files' | 'folder'): Promise<string[] | null>
+    uploadFiles(sessionId: string, targetDir: string, localPaths: string[]): Promise<void>
+    onUploadProgress(callback: (event: UploadProgressEvent) => void): () => void
   }
   terminal: {
     create(sessionId: string, cols: number, rows: number): Promise<string>

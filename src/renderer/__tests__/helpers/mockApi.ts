@@ -37,6 +37,11 @@ export function createMockApi(): IRemoteApi {
       rename: vi.fn().mockResolvedValue(undefined),
       mkdir: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn().mockResolvedValue(undefined),
+      deleteRecursive: vi.fn().mockResolvedValue(undefined),
+      createFile: vi.fn().mockResolvedValue(undefined),
+      openUploadDialog: vi.fn().mockResolvedValue(null),
+      uploadFiles: vi.fn().mockResolvedValue(undefined),
+      onUploadProgress: vi.fn().mockReturnValue(() => {}),
     },
     terminal: {
       create: vi.fn().mockResolvedValue('term-1'),

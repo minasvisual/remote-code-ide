@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FileExplorer } from '../FileExplorer'
 import { createMockApi } from '../../../../__tests__/helpers/mockApi'
@@ -165,6 +166,38 @@ describe('FileExplorer', () => {
     await waitFor(() => {
       expect(mockDisconnect).not.toHaveBeenCalled()
     })
+  })
+
+  it('renders Upload Files and Upload Folder buttons in toolbar', async () => {
+    mockApi.sftp.listDir.mockResolvedValue([])
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => {
+      expect(screen.getByTitle('Upload Files')).toBeInTheDocument()
+      expect(screen.getByTitle('Upload Folder')).toBeInTheDocument()
+    })
+  })
+
+  it('calls openUploadDialog with "files" when Upload Files button is clicked', async () => {
+    mockApi.sftp.listDir.mockResolvedValue([])
+    mockApi.sftp.openUploadDialog.mockResolvedValue(null)
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => screen.getByTitle('Upload Files'))
+    await userEvent.click(screen.getByTitle('Upload Files'))
+    await waitFor(() => {
+      expect(mockApi.sftp.openUploadDialog).toHaveBeenCalledWith('files')
+    })
+  })
+
+  it('does not show upload dialog when openUploadDialog returns null', async () => {
+    mockApi.sftp.listDir.mockResolvedValue([])
+    mockApi.sftp.openUploadDialog.mockResolvedValue(null)
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => screen.getByTitle('Upload Files'))
+    await userEvent.click(screen.getByTitle('Upload Files'))
+    await waitFor(() => {
+      expect(mockApi.sftp.uploadFiles).not.toHaveBeenCalled()
+    })
+    expect(screen.queryByText('Preparing upload')).not.toBeInTheDocument()
   })
 
   it('renders nothing when there is no active session', () => {

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IRemoteApi } from '../renderer/domain/ports/IRemoteApi'
+import type { IRemoteApi, UploadProgressEvent } from '../renderer/domain/ports/IRemoteApi'
 
 const api: IRemoteApi = {
   connections: {
@@ -24,7 +24,22 @@ const api: IRemoteApi = {
     rename: (sessionId, oldPath, newPath) =>
       ipcRenderer.invoke('sftp:rename', sessionId, oldPath, newPath),
     mkdir: (sessionId, path) => ipcRenderer.invoke('sftp:mkdir', sessionId, path),
-    delete: (sessionId, path) => ipcRenderer.invoke('sftp:delete', sessionId, path)
+    delete: (sessionId, path) => ipcRenderer.invoke('sftp:delete', sessionId, path),
+    deleteRecursive: (sessionId, path) => ipcRenderer.invoke('sftp:deleteRecursive', sessionId, path),
+    createFile: async (sessionId, path) => {
+      const result = await ipcRenderer.invoke('sftp:createFile', sessionId, path)
+      if (!result.success) {
+        throw Object.assign(new Error(result.error), { code: result.code })
+      }
+    },
+    openUploadDialog: (mode) => ipcRenderer.invoke('sftp:openUploadDialog', mode),
+    uploadFiles: (sessionId, targetDir, localPaths) =>
+      ipcRenderer.invoke('sftp:uploadFiles', { sessionId, targetDir, localPaths }),
+    onUploadProgress: (callback) => {
+      const listener = (_e: Electron.IpcRendererEvent, event: UploadProgressEvent) => callback(event)
+      ipcRenderer.on('sftp:uploadProgress', listener)
+      return () => ipcRenderer.removeListener('sftp:uploadProgress', listener)
+    }
   },
   terminal: {
     create: (sessionId, cols, rows) =>
