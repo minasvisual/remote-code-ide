@@ -3,6 +3,7 @@ import { Modal } from '../commons/Modal'
 import { Input } from '../commons/Input'
 import { Button } from '../commons/Button'
 import { Spinner } from '../commons/Spinner'
+import { SshKeyTutorialModal } from './SshKeyTutorialModal'
 import { useApp } from '../../../application/contexts/AppContext'
 import type { Connection, NewConnection } from '../../../domain/entities/Connection'
 
@@ -25,6 +26,7 @@ export function ConnectionForm({ connection, onClose }: Props) {
     plainPrivateKey: ''
   })
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+  const [showTutorial, setShowTutorial] = useState(false)
   const [testMessage, setTestMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
@@ -74,6 +76,7 @@ export function ConnectionForm({ connection, onClose }: Props) {
   const credPlaceholder = isEdit ? 'Leave blank to keep current' : undefined
 
   return (
+    <>
     <Modal
       title={isEdit ? 'Edit Connection' : 'New Connection'}
       onClose={onClose}
@@ -122,7 +125,24 @@ export function ConnectionForm({ connection, onClose }: Props) {
           <Input label="Password" type="password" value={form.plainPassword ?? ''} onChange={(e) => set('plainPassword', e.target.value)} placeholder={credPlaceholder} />
         ) : (
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-ide-text-muted">Private Key (PEM content)</label>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-ide-text-muted">Private Key (PEM content)</label>
+              <div className="relative group/info">
+                <button
+                  type="button"
+                  onClick={() => setShowTutorial(true)}
+                  className="flex items-center justify-center w-3.5 h-3.5 rounded-full text-ide-text-muted hover:text-ide-accent transition-colors"
+                  aria-label="See tutorial on how to generate an OpenSSH key"
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a.75.75 0 1 1 0 1.5A.75.75 0 0 1 8 4zm-.25 2.75h.5a.5.5 0 0 1 .5.5v3.5a.5.5 0 0 1-.5.5h-.5a.5.5 0 0 1-.5-.5v-3.5a.5.5 0 0 1 .5-.5z" />
+                  </svg>
+                </button>
+                <div className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 z-50 w-56 px-2 py-1.5 rounded bg-[#3c3c3c] border border-ide-border text-[11px] text-ide-text leading-snug shadow-lg opacity-0 group-hover/info:opacity-100 transition-opacity whitespace-normal">
+                  See the tutorial on how to generate an OpenSSH key from your private key
+                </div>
+              </div>
+            </div>
             <textarea
               value={form.plainPrivateKey ?? ''}
               onChange={(e) => set('plainPrivateKey', e.target.value)}
@@ -142,5 +162,7 @@ export function ConnectionForm({ connection, onClose }: Props) {
         </div>
       </div>
     </Modal>
+    {showTutorial && <SshKeyTutorialModal onClose={() => setShowTutorial(false)} />}
+    </>
   )
 }

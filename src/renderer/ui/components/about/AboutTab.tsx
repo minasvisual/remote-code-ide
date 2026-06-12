@@ -16,7 +16,7 @@ export function AboutTab() {
   return (
     <div className="p-4 text-ide-text text-sm overflow-y-auto h-full">
       <div className="mb-6">
-        <h2 className="text-base font-semibold text-ide-text mb-1">MyCodAny</h2>
+        <h2 className="text-base font-semibold text-ide-text mb-1">Remote Code IDE</h2>
         <p className="text-ide-text-muted">Version {__APP_VERSION__}</p>
       </div>
 
@@ -46,6 +46,16 @@ export function AboutTab() {
           Author: Ulisses Mantovani
         </p>
         <p className="text-ide-text-muted text-xs mt-1">License: MIT</p>
+        <p className="text-xs mt-1">
+          <a
+            href="https://github.com/minasvisual/remote-code-ide"
+            target="_blank"
+            rel="noreferrer"
+            className="text-ide-accent hover:underline"
+          >
+            github.com/minasvisual/remote-code-ide
+          </a>
+        </p>
       </section>
 
       <section>
