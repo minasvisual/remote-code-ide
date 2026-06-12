@@ -15,8 +15,7 @@ function InfoIcon() {
 
 const topItems = [
   { id: 'explorer', icon: '📁', title: 'Explorer' },
-  { id: 'connections', icon: '⚡', title: 'Connections' },
-  { id: 'extensions', icon: '🧩', title: 'Extensions (OpenVSX)' }
+  { id: 'connections', icon: '⚡', title: 'Connections' }
 ]
 
 const bottomItems = [

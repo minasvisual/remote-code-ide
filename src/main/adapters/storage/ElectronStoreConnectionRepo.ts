@@ -40,6 +40,7 @@ export class ElectronStoreConnectionRepo implements IConnectionRepo {
       port: conn.port,
       username: conn.username,
       authType: conn.authType,
+      initialDirectory: conn.initialDirectory || undefined,
       encryptedPassword: conn.plainPassword
         ? this.crypto.encrypt(conn.plainPassword)
         : undefined,
