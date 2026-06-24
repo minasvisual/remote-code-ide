@@ -8,7 +8,7 @@ const terminals = new Map<string, ClientChannel>()
 export function registerTerminalIpc(sshClient: Ssh2Client): void {
   ipcMain.handle(
     'terminal:create',
-    async (_e, sessionId: string, cols: number, rows: number) => {
+    async (_e, sessionId: string, cols: number, rows: number, initialDir?: string) => {
       const client = sshClient.getClient(sessionId)
       const termId = uuidv4()
 
@@ -20,6 +20,10 @@ export function registerTerminalIpc(sshClient: Ssh2Client): void {
       })
 
       terminals.set(termId, stream)
+
+      if (initialDir) {
+        stream.write(`cd ${initialDir} && clear\n`)
+      }
 
       stream.on('data', (data: Buffer) => {
         BrowserWindow.getAllWindows().forEach((w) => {

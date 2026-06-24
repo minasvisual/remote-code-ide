@@ -9,11 +9,17 @@ interface Notification {
   message: string
 }
 
+interface TerminalTarget {
+  path: string
+  tick: number
+}
+
 interface AppContextValue {
   connections: Connection[]
   activeSession: ActiveSession | null
   notifications: Notification[]
   isConnecting: boolean
+  terminalTargetDir: TerminalTarget | null
   loadConnections(): Promise<void>
   saveConnection(conn: NewConnection): Promise<Connection>
   updateConnection(conn: Connection): Promise<Connection>
@@ -23,6 +29,7 @@ interface AppContextValue {
   disconnect(): Promise<void>
   notify(type: Notification['type'], message: string): void
   dismissNotification(id: string): void
+  openTerminalAt(path: string): void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -33,6 +40,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isConnecting, setIsConnecting] = useState(false)
+  const [terminalTargetDir, setTerminalTargetDir] = useState<TerminalTarget | null>(null)
 
   const notify = useCallback((type: Notification['type'], message: string) => {
     const id = Date.now().toString()
@@ -115,8 +123,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!activeSession) return
     await api.ssh.disconnect(activeSession.sessionId)
     setActiveSession(null)
+    setTerminalTargetDir(null)
     notify('info', 'Disconnected')
   }, [api, activeSession, notify])
+
+  const openTerminalAt = useCallback((path: string) => {
+    setTerminalTargetDir((prev) => ({ path, tick: (prev?.tick ?? 0) + 1 }))
+  }, [])
 
   return (
     <AppContext.Provider
@@ -125,6 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         activeSession,
         notifications,
         isConnecting,
+        terminalTargetDir,
         loadConnections,
         saveConnection,
         updateConnection,
@@ -133,7 +147,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         connect,
         disconnect,
         notify,
-        dismissNotification
+        dismissNotification,
+        openTerminalAt
       }}
     >
       {children}

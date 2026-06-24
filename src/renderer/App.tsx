@@ -16,7 +16,7 @@ import { useEditor } from './application/contexts/EditorContext'
 import { useKeyboardShortcuts } from './application/hooks/useKeyboardShortcuts'
 
 function IDELayout() {
-  const { activeSession } = useApp()
+  const { activeSession, terminalTargetDir } = useApp()
   const { tabs, activeTabId, closeTab, cycleTab } = useEditor()
 
   useKeyboardShortcuts({ closeTab, cycleTab, activeTabId })
@@ -28,6 +28,13 @@ function IDELayout() {
     if (activeSession) setSidebarView('explorer')
   }, [activeSession?.sessionId])
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [terminalDir, setTerminalDir] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (!terminalTargetDir) return
+    setTerminalDir(terminalTargetDir.path)
+    setTerminalOpen(true)
+  }, [terminalTargetDir?.tick])
 
   const hasActiveFile = tabs.some((t) => t.id === activeTabId)
 
@@ -76,7 +83,7 @@ function IDELayout() {
           {/* Terminal Panel */}
           {terminalOpen && (
             <div className="border-t border-ide-border" style={{ height: '35%' }}>
-              <TerminalPanel />
+              <TerminalPanel key={terminalTargetDir?.tick} overrideDir={terminalDir} />
             </div>
           )}
         </div>

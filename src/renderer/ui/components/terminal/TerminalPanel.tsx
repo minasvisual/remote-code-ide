@@ -5,7 +5,11 @@ import '@xterm/xterm/css/xterm.css'
 import { getRemoteApi } from '../../../adapters/api/WindowRemoteApi'
 import { useApp } from '../../../application/contexts/AppContext'
 
-export function TerminalPanel() {
+interface Props {
+  overrideDir?: string
+}
+
+export function TerminalPanel({ overrideDir }: Props) {
   const api = getRemoteApi()
   const { activeSession, notify } = useApp()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -13,6 +17,8 @@ export function TerminalPanel() {
   const fitRef = useRef<FitAddon | null>(null)
   const termIdRef = useRef<string | null>(null)
   const [isReady, setIsReady] = useState(false)
+
+  const initialDir = overrideDir ?? activeSession?.initialDirectory
 
   useEffect(() => {
     if (!activeSession || !containerRef.current) return
@@ -46,7 +52,7 @@ export function TerminalPanel() {
 
     const { cols, rows } = term
 
-    api.terminal.create(activeSession.sessionId, cols, rows).then((id) => {
+    api.terminal.create(activeSession.sessionId, cols, rows, initialDir).then((id) => {
       termIdRef.current = id
       setIsReady(true)
 
@@ -76,7 +82,7 @@ export function TerminalPanel() {
       termIdRef.current = null
       setIsReady(false)
     }
-  }, [activeSession?.sessionId])
+  }, [activeSession?.sessionId, overrideDir])
 
   if (!activeSession) {
     return (

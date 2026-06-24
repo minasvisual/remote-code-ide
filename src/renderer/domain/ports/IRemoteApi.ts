@@ -51,7 +51,7 @@ export interface IRemoteApi {
     onUploadProgress(callback: (event: UploadProgressEvent) => void): () => void
   }
   terminal: {
-    create(sessionId: string, cols: number, rows: number): Promise<string>
+    create(sessionId: string, cols: number, rows: number, initialDir?: string): Promise<string>
     sendInput(termId: string, data: string): void
     resize(termId: string, cols: number, rows: number): void
     close(termId: string): Promise<void>

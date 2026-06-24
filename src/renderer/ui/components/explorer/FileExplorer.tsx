@@ -10,7 +10,7 @@ import type { FileNode } from '../../../domain/entities/FileNode'
 
 export function FileExplorer() {
   const api = getRemoteApi()
-  const { activeSession, notify, disconnect } = useApp()
+  const { activeSession, notify, disconnect, openTerminalAt } = useApp()
   const [rootNodes, setRootNodes] = useState<FileNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newFileTargetDir, setNewFileTargetDir] = useState<string | null>(null)
@@ -219,6 +219,7 @@ export function FileExplorer() {
               onDelete={handleDelete}
               onRename={handleRename}
               onUpload={handleUpload}
+              onOpenTerminal={openTerminalAt}
               refreshTarget={refreshTarget}
             />
           ))

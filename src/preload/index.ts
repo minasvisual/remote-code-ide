@@ -42,8 +42,8 @@ const api: IRemoteApi = {
     }
   },
   terminal: {
-    create: (sessionId, cols, rows) =>
-      ipcRenderer.invoke('terminal:create', sessionId, cols, rows),
+    create: (sessionId, cols, rows, initialDir) =>
+      ipcRenderer.invoke('terminal:create', sessionId, cols, rows, initialDir),
     sendInput: (termId, data) => ipcRenderer.send('terminal:input', termId, data),
     resize: (termId, cols, rows) => ipcRenderer.send('terminal:resize', termId, cols, rows),
     close: (termId) => ipcRenderer.invoke('terminal:close', termId),

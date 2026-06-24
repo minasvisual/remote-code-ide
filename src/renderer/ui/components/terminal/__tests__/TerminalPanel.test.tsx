@@ -32,6 +32,15 @@ vi.mock('../../../../application/contexts/AppContext', async (importOriginal) =>
 
 import { useApp } from '../../../../application/contexts/AppContext'
 
+const baseAppValue = {
+  connections: [], notifications: [], isConnecting: false,
+  terminalTargetDir: null,
+  loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
+  deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
+  disconnect: vi.fn(), notify: vi.fn(), dismissNotification: vi.fn(),
+  openTerminalAt: vi.fn(),
+}
+
 let mockApi: ReturnType<typeof createMockApi>
 
 beforeEach(() => {
@@ -54,10 +63,8 @@ afterEach(() => {
 describe('TerminalPanel', () => {
   it('shows connect message when no active session', () => {
     vi.mocked(useApp).mockReturnValue({
-      activeSession: null, connections: [], notifications: [], isConnecting: false,
-      loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
-      deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
-      disconnect: vi.fn(), notify: vi.fn(), dismissNotification: vi.fn(),
+      ...baseAppValue,
+      activeSession: null,
     })
     renderWithProviders(<TerminalPanel />)
     expect(screen.getByText('Connect to a server to open a terminal')).toBeInTheDocument()
@@ -65,27 +72,49 @@ describe('TerminalPanel', () => {
 
   it('renders terminal container when session is active', () => {
     vi.mocked(useApp).mockReturnValue({
+      ...baseAppValue,
       activeSession: { sessionId: 'sess-1', connectionId: 'conn-1', connectionLabel: 'My Server' },
-      connections: [], notifications: [], isConnecting: false,
-      loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
-      deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
-      disconnect: vi.fn(), notify: vi.fn(), dismissNotification: vi.fn(),
     })
     renderWithProviders(<TerminalPanel />)
     expect(screen.getByText('Opening terminal…')).toBeInTheDocument()
   })
 
-  it('calls terminal.create when session is active', async () => {
+  it('calls terminal.create with undefined initialDir when session has no initialDirectory', async () => {
     vi.mocked(useApp).mockReturnValue({
+      ...baseAppValue,
       activeSession: { sessionId: 'sess-42', connectionId: 'conn-1', connectionLabel: 'My Server' },
-      connections: [], notifications: [], isConnecting: false,
-      loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
-      deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
-      disconnect: vi.fn(), notify: vi.fn(), dismissNotification: vi.fn(),
     })
     renderWithProviders(<TerminalPanel />)
     await vi.waitFor(() => {
-      expect(mockApi.terminal.create).toHaveBeenCalledWith('sess-42', 80, 24)
+      expect(mockApi.terminal.create).toHaveBeenCalledWith('sess-42', 80, 24, undefined)
+    })
+  })
+
+  it('passes initialDirectory from activeSession to terminal.create', async () => {
+    vi.mocked(useApp).mockReturnValue({
+      ...baseAppValue,
+      activeSession: {
+        sessionId: 'sess-99', connectionId: 'conn-1', connectionLabel: 'My Server',
+        initialDirectory: '/var/www',
+      },
+    })
+    renderWithProviders(<TerminalPanel />)
+    await vi.waitFor(() => {
+      expect(mockApi.terminal.create).toHaveBeenCalledWith('sess-99', 80, 24, '/var/www')
+    })
+  })
+
+  it('uses overrideDir prop over activeSession.initialDirectory', async () => {
+    vi.mocked(useApp).mockReturnValue({
+      ...baseAppValue,
+      activeSession: {
+        sessionId: 'sess-99', connectionId: 'conn-1', connectionLabel: 'My Server',
+        initialDirectory: '/var/www',
+      },
+    })
+    renderWithProviders(<TerminalPanel overrideDir="/opt/app" />)
+    await vi.waitFor(() => {
+      expect(mockApi.terminal.create).toHaveBeenCalledWith('sess-99', 80, 24, '/opt/app')
     })
   })
 })

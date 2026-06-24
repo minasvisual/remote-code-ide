@@ -16,6 +16,7 @@ interface Props {
   onDelete?: (node: FileNode) => void
   onRename?: (node: FileNode, newName: string) => void
   onUpload?: (targetDir: string, mode: 'files' | 'folder') => void
+  onOpenTerminal?: (path: string) => void
   refreshSignal?: number
   refreshTarget?: { path: string; tick: number } | null
 }
@@ -32,7 +33,7 @@ function getFileIcon(filename: string): string {
   return FILE_ICONS[ext] ?? '📄'
 }
 
-export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpload, refreshSignal, refreshTarget }: Props) {
+export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpload, onOpenTerminal, refreshSignal, refreshTarget }: Props) {
   const api = getRemoteApi()
   const { openFile } = useEditor()
   const { notify } = useApp()
@@ -263,6 +264,8 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
     { label: 'Upload folder here', onClick: () => onUpload?.(uploadTargetDir, 'folder') },
     ...(node.type === 'directory' ? [
       { type: 'divider' as const },
+      { label: 'Open Terminal Here', onClick: () => onOpenTerminal?.(node.path) },
+      { type: 'divider' as const },
       { label: 'New File', onClick: () => { setNewFileError(undefined); setNewFileOpen(true) } },
       { label: 'New Folder', onClick: () => { setNewFolderError(undefined); setNewFolderOpen(true) } },
       { label: 'Refresh', onClick: doRefresh },
@@ -371,6 +374,7 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
                 onDelete={handleChildDelete}
                 onRename={handleChildRename}
                 onUpload={onUpload}
+                onOpenTerminal={onOpenTerminal}
                 refreshSignal={subtreeRefreshSignal}
                 refreshTarget={subtreeRefreshTarget}
               />
