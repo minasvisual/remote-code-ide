@@ -1,11 +1,12 @@
 import {
-  createContext, useContext, useState, useCallback, useRef, type ReactNode
+  createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode
 } from 'react'
 import { getRemoteApi } from '../../adapters/api/WindowRemoteApi'
 import type { EditorTab } from '../../domain/entities/EditorTab'
 import type { FileNode } from '../../domain/entities/FileNode'
 import { v4 as uuidv4 } from 'uuid'
 import { useApp } from './AppContext'
+import { UnsavedChangesDialog } from '../../ui/components/commons/UnsavedChangesDialog'
 
 const LANGUAGE_MAP: Record<string, string> = {
   ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
@@ -22,15 +23,23 @@ function detectLanguage(filename: string): string {
   return LANGUAGE_MAP[ext] ?? 'plaintext'
 }
 
+interface PendingClose {
+  tabId: string
+  resolve: (action: 'save' | 'discard' | 'cancel') => void
+}
+
 interface EditorContextValue {
   tabs: EditorTab[]
   activeTabId: string | null
+  pendingClose: PendingClose | null
   openFile(node: FileNode, sessionId: string): Promise<void>
-  closeTab(tabId: string): void
+  closeTab(tabId: string): Promise<'save' | 'discard' | 'cancel' | 'closed'>
+  confirmClose(action: 'save' | 'discard' | 'cancel'): void
   setActiveTab(tabId: string): void
   cycleTab(delta: 1 | -1): void
   updateContent(tabId: string, content: string): void
   saveActiveFile(): Promise<void>
+  getDirtyTabsBySession(sessionId: string): EditorTab[]
   isSaving: boolean
 }
 
@@ -38,10 +47,11 @@ const EditorContext = createContext<EditorContextValue | null>(null)
 
 export function EditorProvider({ children }: { children: ReactNode }) {
   const api = getRemoteApi()
-  const { notify, activeSession } = useApp()
+  const { notify, activeSession, registerBeforeDisconnect } = useApp()
   const [tabs, setTabs] = useState<EditorTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [pendingClose, setPendingClose] = useState<PendingClose | null>(null)
   const contentRef = useRef<Map<string, string>>(new Map())
 
   const openFile = useCallback(
@@ -94,7 +104,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     setActiveTabId(tabs[nextIdx].id)
   }, [tabs, activeTabId])
 
-  const closeTab = useCallback((tabId: string) => {
+  const removeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId)
       const remaining = prev.filter((t) => t.id !== tabId)
@@ -106,6 +116,64 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       return remaining
     })
   }, [activeTabId])
+
+  const closeTab = useCallback(async (tabId: string): Promise<'save' | 'discard' | 'cancel' | 'closed'> => {
+    const tab = tabs.find((t) => t.id === tabId)
+    if (!tab) return 'closed'
+
+    if (!tab.isDirty) {
+      removeTab(tabId)
+      return 'closed'
+    }
+
+    const action = await new Promise<'save' | 'discard' | 'cancel'>((resolve) => {
+      setPendingClose({ tabId, resolve })
+    })
+
+    return action
+  }, [tabs, removeTab])
+
+  const confirmClose = useCallback((action: 'save' | 'discard' | 'cancel') => {
+    if (!pendingClose) return
+    const { tabId, resolve } = pendingClose
+
+    if (action === 'cancel') {
+      setPendingClose(null)
+      resolve('cancel')
+      return
+    }
+
+    if (action === 'discard') {
+      removeTab(tabId)
+      setPendingClose(null)
+      resolve('discard')
+      return
+    }
+
+    if (action === 'save') {
+      const tab = tabs.find((t) => t.id === tabId)
+      if (!tab) {
+        setPendingClose(null)
+        resolve('cancel')
+        return
+      }
+
+      setIsSaving(true)
+      const content = contentRef.current.get(tabId) ?? tab.content
+      api.sftp.writeFile(tab.sessionId, tab.remotePath, content)
+        .then(() => {
+          removeTab(tabId)
+          setPendingClose(null)
+          resolve('save')
+        })
+        .catch((err: unknown) => {
+          notify('error', `Save failed: ${(err as Error).message}`)
+          setPendingClose(null)
+          resolve('cancel')
+        })
+        .finally(() => setIsSaving(false))
+    }
+  }, [pendingClose, tabs, api, removeTab, notify])
 
   const updateContent = useCallback((tabId: string, content: string) => {
     contentRef.current.set(tabId, content)
@@ -134,11 +202,41 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     }
   }, [api, activeTabId, tabs, activeSession, notify])
 
+  const getDirtyTabsBySession = useCallback((sessionId: string): EditorTab[] => {
+    return tabs.filter((t) => t.sessionId === sessionId && t.isDirty)
+  }, [tabs])
+
+  const closeTabRef = useRef(closeTab)
+  closeTabRef.current = closeTab
+  const getDirtyTabsRef = useRef(getDirtyTabsBySession)
+  getDirtyTabsRef.current = getDirtyTabsBySession
+
+  useEffect(() => {
+    registerBeforeDisconnect(async (sessionId: string) => {
+      const dirtyTabs = getDirtyTabsRef.current(sessionId)
+      for (const tab of dirtyTabs) {
+        const result = await closeTabRef.current(tab.id)
+        if (result === 'cancel') return false
+      }
+      return true
+    })
+  }, [registerBeforeDisconnect])
+
+  const pendingTab = pendingClose ? tabs.find((t) => t.id === pendingClose.tabId) : null
+
   return (
     <EditorContext.Provider
-      value={{ tabs, activeTabId, openFile, closeTab, setActiveTab: setActiveTabId, cycleTab, updateContent, saveActiveFile, isSaving }}
+      value={{ tabs, activeTabId, pendingClose, openFile, closeTab, confirmClose, setActiveTab: setActiveTabId, cycleTab, updateContent, saveActiveFile, getDirtyTabsBySession, isSaving }}
     >
       {children}
+      {pendingTab && (
+        <UnsavedChangesDialog
+          filename={pendingTab.filename}
+          onSave={() => confirmClose('save')}
+          onDiscard={() => confirmClose('discard')}
+          onCancel={() => confirmClose('cancel')}
+        />
+      )}
     </EditorContext.Provider>
   )
 }

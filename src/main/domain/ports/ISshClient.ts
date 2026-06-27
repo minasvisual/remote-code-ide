@@ -14,6 +14,7 @@ export interface TestResult {
 export interface ISshClient {
   connect(config: SshConnectConfig): Promise<string>
   disconnect(sessionId: string): Promise<void>
+  disconnectAll(): Promise<void>
   test(config: SshConnectConfig): Promise<TestResult>
   isConnected(sessionId: string): boolean
 }

@@ -90,7 +90,9 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => tempFiles.cleanAll())
+app.on('before-quit', () => {
+  sshClient.disconnectAll().catch(() => {}).finally(() => tempFiles.cleanAll())
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

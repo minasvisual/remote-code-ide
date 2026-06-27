@@ -41,12 +41,12 @@ beforeEach(() => {
     loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
     deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
     disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(),
-    openTerminalAt: vi.fn(),
+    openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
   })
   vi.mocked(useEditor).mockReturnValue({
-    tabs: [], activeTabId: null, openFile: mockOpenFile,
-    closeTab: vi.fn(), setActiveTab: vi.fn(), cycleTab: vi.fn(), updateContent: vi.fn(),
-    saveActiveFile: vi.fn(), isSaving: false,
+    tabs: [], activeTabId: null, pendingClose: null, openFile: mockOpenFile,
+    closeTab: vi.fn(), confirmClose: vi.fn(), setActiveTab: vi.fn(), cycleTab: vi.fn(), updateContent: vi.fn(),
+    saveActiveFile: vi.fn(), getDirtyTabsBySession: vi.fn().mockReturnValue([]), isSaving: false,
   })
 })
 

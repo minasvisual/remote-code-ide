@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { getRemoteApi } from '../../adapters/api/WindowRemoteApi'
 import type { Connection, NewConnection } from '../../domain/entities/Connection'
 import type { ActiveSession } from '../../domain/entities/EditorTab'
@@ -30,6 +30,7 @@ interface AppContextValue {
   notify(type: Notification['type'], message: string): void
   dismissNotification(id: string): void
   openTerminalAt(path: string): void
+  registerBeforeDisconnect(cb: (sessionId: string) => Promise<boolean>): void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -41,6 +42,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isConnecting, setIsConnecting] = useState(false)
   const [terminalTargetDir, setTerminalTargetDir] = useState<TerminalTarget | null>(null)
+  const beforeDisconnectRef = useRef<((sessionId: string) => Promise<boolean>) | null>(null)
 
   const notify = useCallback((type: Notification['type'], message: string) => {
     const id = Date.now().toString()
@@ -119,8 +121,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [api, connections, notify]
   )
 
+  const registerBeforeDisconnect = useCallback((cb: (sessionId: string) => Promise<boolean>) => {
+    beforeDisconnectRef.current = cb
+  }, [])
+
   const disconnect = useCallback(async () => {
     if (!activeSession) return
+    if (beforeDisconnectRef.current) {
+      const proceed = await beforeDisconnectRef.current(activeSession.sessionId)
+      if (!proceed) return
+    }
     await api.ssh.disconnect(activeSession.sessionId)
     setActiveSession(null)
     setTerminalTargetDir(null)
@@ -148,7 +158,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         disconnect,
         notify,
         dismissNotification,
-        openTerminalAt
+        openTerminalAt,
+        registerBeforeDisconnect
       }}
     >
       {children}

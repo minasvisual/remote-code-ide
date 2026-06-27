@@ -36,6 +36,14 @@ export class Ssh2Client implements ISshClient {
     }
   }
 
+  async disconnectAll(): Promise<void> {
+    const entries = [...this.sessions.entries()]
+    this.sessions.clear()
+    for (const [, client] of entries) {
+      try { client.end() } catch { /* continue on per-session error */ }
+    }
+  }
+
   async test(config: SshConnectConfig): Promise<TestResult> {
     const client = new Client()
     return new Promise<TestResult>((resolve) => {

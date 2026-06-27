@@ -33,6 +33,7 @@ function baseUseApp() {
     dismissNotification: vi.fn(),
     openTerminalAt: vi.fn(),
     terminalTargetDir: null,
+    registerBeforeDisconnect: vi.fn(),
   }
 }
 

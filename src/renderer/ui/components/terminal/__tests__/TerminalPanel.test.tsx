@@ -11,6 +11,10 @@ vi.mock('@xterm/xterm', () => ({
     open = vi.fn()
     onData = vi.fn()
     dispose = vi.fn()
+    getSelection = vi.fn().mockReturnValue('')
+    attachCustomKeyEventHandler = vi.fn()
+    focus = vi.fn()
+    paste = vi.fn()
     cols = 80
     rows = 24
   },
@@ -39,6 +43,7 @@ const baseAppValue = {
   deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
   disconnect: vi.fn(), notify: vi.fn(), dismissNotification: vi.fn(),
   openTerminalAt: vi.fn(),
+  registerBeforeDisconnect: vi.fn(),
 }
 
 let mockApi: ReturnType<typeof createMockApi>

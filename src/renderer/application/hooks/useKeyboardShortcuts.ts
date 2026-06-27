@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 interface Callbacks {
-  closeTab(tabId: string): void
+  closeTab(tabId: string): void | Promise<unknown>
   cycleTab(delta: 1 | -1): void
   activeTabId: string | null
 }

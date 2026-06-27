@@ -51,7 +51,7 @@ beforeEach(() => {
     disconnect: vi.fn(),
     notify: vi.fn(),
     dismissNotification: vi.fn(),
-    openTerminalAt: vi.fn(),
+    openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
   })
 })
 
@@ -105,7 +105,7 @@ describe('FileExplorer', () => {
       disconnect: vi.fn(),
       notify: vi.fn(),
       dismissNotification: vi.fn(),
-      openTerminalAt: vi.fn(),
+      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
     })
     mockApi.sftp.listDir.mockResolvedValue([])
     renderWithProviders(<FileExplorer />)
@@ -139,7 +139,7 @@ describe('FileExplorer', () => {
       disconnect: mockDisconnect,
       notify: mockNotify,
       dismissNotification: vi.fn(),
-      openTerminalAt: vi.fn(),
+      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
       terminalTargetDir: null,
     })
     mockApi.sftp.listDir.mockRejectedValue(new Error('No such file or directory'))
@@ -166,7 +166,7 @@ describe('FileExplorer', () => {
       disconnect: mockDisconnect,
       notify: vi.fn(),
       dismissNotification: vi.fn(),
-      openTerminalAt: vi.fn(),
+      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
       terminalTargetDir: null,
     })
     mockApi.sftp.listDir.mockRejectedValue(new Error('Permission denied'))
@@ -224,7 +224,7 @@ describe('FileExplorer', () => {
       disconnect: vi.fn(),
       notify: vi.fn(),
       dismissNotification: vi.fn(),
-      openTerminalAt: vi.fn(),
+      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
     })
     const { container } = renderWithProviders(<FileExplorer />)
     expect(container.firstChild).toBeNull()

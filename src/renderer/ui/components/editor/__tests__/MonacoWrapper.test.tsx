@@ -53,12 +53,15 @@ function mockEditorContext(saveActiveFile = vi.fn()) {
   vi.mocked(useEditor).mockReturnValue({
     tabs: [makeTab()],
     activeTabId: 'tab-1',
+    pendingClose: null,
     openFile: vi.fn(),
     closeTab: vi.fn(),
+    confirmClose: vi.fn(),
     setActiveTab: vi.fn(),
     cycleTab: vi.fn(),
     updateContent: vi.fn(),
     saveActiveFile,
+    getDirtyTabsBySession: vi.fn().mockReturnValue([]),
     isSaving: false,
   })
 }
@@ -83,12 +86,15 @@ describe('MonacoWrapper', () => {
     vi.mocked(useEditor).mockReturnValue({
       tabs: [],
       activeTabId: null,
+      pendingClose: null,
       openFile: vi.fn(),
       closeTab: vi.fn(),
+      confirmClose: vi.fn(),
       setActiveTab: vi.fn(),
       cycleTab: vi.fn(),
       updateContent: vi.fn(),
       saveActiveFile: vi.fn(),
+      getDirtyTabsBySession: vi.fn().mockReturnValue([]),
       isSaving: false,
     })
     const { container } = renderWithProviders(<MonacoWrapper />)
@@ -99,12 +105,15 @@ describe('MonacoWrapper', () => {
     vi.mocked(useEditor).mockReturnValue({
       tabs: [makeTab()],
       activeTabId: 'tab-1',
+      pendingClose: null,
       openFile: vi.fn(),
       closeTab: vi.fn(),
+      confirmClose: vi.fn(),
       setActiveTab: vi.fn(),
       cycleTab: vi.fn(),
       updateContent: vi.fn(),
       saveActiveFile: vi.fn(),
+      getDirtyTabsBySession: vi.fn().mockReturnValue([]),
       isSaving: true,
     })
     renderWithProviders(<MonacoWrapper />)

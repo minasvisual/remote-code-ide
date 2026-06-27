@@ -40,12 +40,15 @@ beforeEach(() => {
   vi.mocked(useEditor).mockReturnValue({
     tabs: [],
     activeTabId: null,
+    pendingClose: null,
     openFile: vi.fn(),
     closeTab: mockCloseTab,
+    confirmClose: vi.fn(),
     setActiveTab: mockSetActiveTab,
     cycleTab: vi.fn(),
     updateContent: vi.fn(),
     saveActiveFile: vi.fn(),
+    getDirtyTabsBySession: vi.fn().mockReturnValue([]),
     isSaving: false,
   })
 })
@@ -67,8 +70,8 @@ describe('EditorTabBar', () => {
     vi.mocked(useEditor).mockReturnValue({
       tabs: [makeTab({ filename: 'index.ts' })],
       activeTabId: 'tab-1',
-      openFile: vi.fn(), closeTab: mockCloseTab, setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
-      updateContent: vi.fn(), saveActiveFile: vi.fn(), isSaving: false,
+      pendingClose: null, openFile: vi.fn(), closeTab: mockCloseTab, confirmClose: vi.fn(), setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
+      updateContent: vi.fn(), saveActiveFile: vi.fn(), getDirtyTabsBySession: vi.fn().mockReturnValue([]), isSaving: false,
     })
     renderWithProviders(<EditorTabBar />)
     expect(screen.getByText('index.ts')).toBeInTheDocument()
@@ -78,8 +81,8 @@ describe('EditorTabBar', () => {
     vi.mocked(useEditor).mockReturnValue({
       tabs: [makeTab({ isDirty: true, filename: 'app.ts' })],
       activeTabId: 'tab-1',
-      openFile: vi.fn(), closeTab: mockCloseTab, setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
-      updateContent: vi.fn(), saveActiveFile: vi.fn(), isSaving: false,
+      pendingClose: null, openFile: vi.fn(), closeTab: mockCloseTab, confirmClose: vi.fn(), setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
+      updateContent: vi.fn(), saveActiveFile: vi.fn(), getDirtyTabsBySession: vi.fn().mockReturnValue([]), isSaving: false,
     })
     renderWithProviders(<EditorTabBar />)
     expect(screen.getByText('●')).toBeInTheDocument()
@@ -89,8 +92,8 @@ describe('EditorTabBar', () => {
     vi.mocked(useEditor).mockReturnValue({
       tabs: [makeTab({ id: 'tab-42', filename: 'server.ts' })],
       activeTabId: null,
-      openFile: vi.fn(), closeTab: mockCloseTab, setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
-      updateContent: vi.fn(), saveActiveFile: vi.fn(), isSaving: false,
+      pendingClose: null, openFile: vi.fn(), closeTab: mockCloseTab, confirmClose: vi.fn(), setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
+      updateContent: vi.fn(), saveActiveFile: vi.fn(), getDirtyTabsBySession: vi.fn().mockReturnValue([]), isSaving: false,
     })
     renderWithProviders(<EditorTabBar />)
     await userEvent.click(screen.getByText('server.ts'))
@@ -101,8 +104,8 @@ describe('EditorTabBar', () => {
     vi.mocked(useEditor).mockReturnValue({
       tabs: [makeTab({ id: 'tab-99', filename: 'config.ts' })],
       activeTabId: 'tab-99',
-      openFile: vi.fn(), closeTab: mockCloseTab, setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
-      updateContent: vi.fn(), saveActiveFile: vi.fn(), isSaving: false,
+      pendingClose: null, openFile: vi.fn(), closeTab: mockCloseTab, confirmClose: vi.fn(), setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
+      updateContent: vi.fn(), saveActiveFile: vi.fn(), getDirtyTabsBySession: vi.fn().mockReturnValue([]), isSaving: false,
     })
     renderWithProviders(<EditorTabBar />)
     await userEvent.click(screen.getByRole('button', { name: '✕' }))
@@ -113,8 +116,8 @@ describe('EditorTabBar', () => {
     vi.mocked(useEditor).mockReturnValue({
       tabs: [makeTab({ id: 't1', filename: 'a.ts' }), makeTab({ id: 't2', filename: 'b.ts' })],
       activeTabId: 't1',
-      openFile: vi.fn(), closeTab: mockCloseTab, setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
-      updateContent: vi.fn(), saveActiveFile: vi.fn(), isSaving: false,
+      pendingClose: null, openFile: vi.fn(), closeTab: mockCloseTab, confirmClose: vi.fn(), setActiveTab: mockSetActiveTab, cycleTab: vi.fn(),
+      updateContent: vi.fn(), saveActiveFile: vi.fn(), getDirtyTabsBySession: vi.fn().mockReturnValue([]), isSaving: false,
     })
     renderWithProviders(<EditorTabBar />)
     expect(screen.getByText('a.ts')).toBeInTheDocument()
