@@ -5,6 +5,14 @@ import { createMockApi } from '../../../../__tests__/helpers/mockApi'
 import { renderWithProviders } from '../../../../__tests__/helpers/renderWithProviders'
 import type { EditorTab } from '../../../../domain/entities/EditorTab'
 
+vi.mock('monaco-editor', () => ({}))
+
+vi.mock('monaco-editor/esm/vs/editor/editor.worker?worker', () => ({ default: vi.fn() }))
+vi.mock('monaco-editor/esm/vs/language/json/json.worker?worker', () => ({ default: vi.fn() }))
+vi.mock('monaco-editor/esm/vs/language/css/css.worker?worker', () => ({ default: vi.fn() }))
+vi.mock('monaco-editor/esm/vs/language/html/html.worker?worker', () => ({ default: vi.fn() }))
+vi.mock('monaco-editor/esm/vs/language/typescript/ts.worker?worker', () => ({ default: vi.fn() }))
+
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value, onChange }: { value?: string; onChange?: (v: string) => void }) => {
     const { createElement } = require('react')

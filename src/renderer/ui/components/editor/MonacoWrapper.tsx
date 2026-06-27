@@ -34,12 +34,29 @@ export function MonacoWrapper() {
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null)
   const saveActiveFileRef = useRef(saveActiveFile)
   saveActiveFileRef.current = saveActiveFile
+  const viewStateMap = useRef<Map<string, MonacoType.editor.ICodeEditorViewState>>(new Map())
+  const prevTabIdRef = useRef<string | null>(null)
   const tab = tabs.find((t) => t.id === activeTabId)
+
+  // Clean up view state when tabs are closed.
+  useEffect(() => {
+    const openIds = new Set(tabs.map((t) => t.id))
+    for (const id of viewStateMap.current.keys()) {
+      if (!openIds.has(id)) viewStateMap.current.delete(id)
+    }
+  }, [tabs])
 
   // Reuse Monaco models across tab switches to preserve undo history.
   // Guard on isLoading: the model must be created with real content, not the empty placeholder.
   useEffect(() => {
     if (!editorRef.current || !monacoInstance || !tab || tab.isLoading) return
+
+    // Save view state of the outgoing tab before switching.
+    if (prevTabIdRef.current && prevTabIdRef.current !== tab.id) {
+      const state = editorRef.current.saveViewState()
+      if (state) viewStateMap.current.set(prevTabIdRef.current, state)
+    }
+
     const uri = monacoInstance.Uri.parse(`remote://${tab.sessionId}${tab.remotePath}`)
     let model = monacoInstance.editor.getModel(uri)
     if (!model) {
@@ -48,6 +65,14 @@ export function MonacoWrapper() {
     if (editorRef.current.getModel()?.uri.toString() !== uri.toString()) {
       editorRef.current.setModel(model)
     }
+
+    // Restore view state of the incoming tab.
+    const savedState = viewStateMap.current.get(tab.id)
+    if (savedState) {
+      editorRef.current.restoreViewState(savedState)
+    }
+
+    prevTabIdRef.current = tab.id
   }, [tab?.id, tab?.isLoading, monacoInstance])
 
   const handleMount = useCallback(

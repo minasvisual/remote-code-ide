@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppProvider, useApp } from './application/contexts/AppContext'
 import { EditorProvider } from './application/contexts/EditorContext'
 import { ActivityBar } from './ui/components/layout/ActivityBar'
@@ -12,6 +12,7 @@ import { TerminalPanel } from './ui/components/terminal/TerminalPanel'
 import { NotificationList } from './ui/components/commons/Notification'
 import { ExtensionsPanel } from './ui/components/extensions/ExtensionsPanel'
 import { AboutPanel } from './ui/components/about/AboutPanel'
+import { ResizeHandle } from './ui/components/commons/ResizeHandle'
 import { useEditor } from './application/contexts/EditorContext'
 import { useKeyboardShortcuts } from './application/hooks/useKeyboardShortcuts'
 
@@ -30,11 +31,26 @@ function IDELayout() {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalDir, setTerminalDir] = useState<string | undefined>(undefined)
 
+  const [sidebarWidth, setSidebarWidth] = useState(240)
+  const [terminalPct, setTerminalPct] = useState(35)
+  const mainAreaRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!terminalTargetDir) return
     setTerminalDir(terminalTargetDir.path)
     setTerminalOpen(true)
   }, [terminalTargetDir?.tick])
+
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth((w) => Math.min(500, Math.max(150, w + delta)))
+  }, [])
+
+  const handleTerminalResize = useCallback((delta: number) => {
+    const mainH = mainAreaRef.current?.clientHeight
+    if (!mainH) return
+    const deltaPct = (delta / mainH) * 100
+    setTerminalPct((p) => Math.min(70, Math.max(15, p - deltaPct)))
+  }, [])
 
   const hasActiveFile = tabs.some((t) => t.id === activeTabId)
 
@@ -45,7 +61,10 @@ function IDELayout() {
         <ActivityBar activeView={sidebarView} onViewChange={setSidebarView} />
 
         {/* Sidebar */}
-        <div className="w-60 bg-ide-sidebar border-r border-ide-border shrink-0 flex flex-col overflow-hidden">
+        <div
+          className="bg-ide-sidebar border-r border-ide-border shrink-0 flex flex-col overflow-hidden"
+          style={{ width: sidebarWidth }}
+        >
           {sidebarView === 'about' ? (
             <AboutPanel />
           ) : sidebarView === 'extensions' ? (
@@ -57,12 +76,15 @@ function IDELayout() {
           )}
         </div>
 
+        {/* Sidebar Resize Handle */}
+        <ResizeHandle direction="horizontal" onResize={handleSidebarResize} />
+
         {/* Main Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div ref={mainAreaRef} className="flex-1 flex flex-col overflow-hidden">
           {/* Editor */}
           <div
             className="flex flex-col overflow-hidden"
-            style={{ height: terminalOpen ? '65%' : '100%' }}
+            style={{ height: terminalOpen ? `${100 - terminalPct}%` : '100%' }}
           >
             <EditorTabBar />
             <div className="flex-1 overflow-hidden">
@@ -70,7 +92,10 @@ function IDELayout() {
             </div>
           </div>
 
-          {/* Terminal Toggle */}
+          {/* Terminal Toggle + Resize Handle */}
+          {terminalOpen && (
+            <ResizeHandle direction="vertical" onResize={handleTerminalResize} />
+          )}
           <div className="flex items-center px-3 h-7 bg-[#2d2d2d] border-t border-ide-border shrink-0">
             <button
               onClick={() => setTerminalOpen((v) => !v)}
@@ -82,7 +107,7 @@ function IDELayout() {
 
           {/* Terminal Panel */}
           {terminalOpen && (
-            <div className="border-t border-ide-border" style={{ height: '35%' }}>
+            <div className="border-t border-ide-border" style={{ height: `${terminalPct}%` }}>
               <TerminalPanel key={terminalTargetDir?.tick} overrideDir={terminalDir} />
             </div>
           )}
