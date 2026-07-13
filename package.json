@@ -1,6 +1,6 @@
 {
   "name": "RemoteCodeIDE",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Remote IDE desktop app with SSH/SFTP connections, Monaco editor, and integrated terminal. Similar to Codeanywhere and VS Code Remote SSH.",
   "author": "Ulisses Mantovani <mantovaniarts@gmail.com>",
   "license": "MIT",
