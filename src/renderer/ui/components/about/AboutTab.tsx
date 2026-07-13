@@ -4,9 +4,57 @@ declare const __APP_VERSION__: string
 
 const CHANGELOG = [
   {
-    version: '1.0.0',
+    version: '0.1.6',
+    date: '2026-07-13',
+    notes: [
+      'Fixed release pipeline: package-lock.json now stays in sync with the release version, and electron-builder no longer auto-publishes on tag builds.'
+    ]
+  },
+  {
+    version: '0.1.5',
+    date: '2026-07-13',
+    notes: [
+      'Scoped the native build skip to cpu-features and fixed tag push in the release workflow.'
+    ]
+  },
+  {
+    version: '0.1.4',
+    date: '2026-07-13',
+    notes: [
+      'Added scripts/tag.js for tagging releases independently of publishing.',
+      'CI: skip optional dependencies during npm ci to avoid native build hangs.'
+    ]
+  },
+  {
+    version: '0.1.3',
+    date: '2026-07-13',
+    notes: [
+      'Fixed an overbroad .gitignore rule that was excluding TempFileManager from version control.'
+    ]
+  },
+  {
+    version: '0.1.2',
+    date: '2026-07-13',
+    notes: [
+      'CI: use Node 24 in the release workflow to match the npm 11 lockfile.'
+    ]
+  },
+  {
+    version: '0.1.1',
+    date: '2026-07-13',
+    notes: [
+      'Added SSH key setup tutorial modal to the connection form.',
+      'Terminal now auto-starts with the session and supports a right-click context menu (copy/paste).',
+      'Added drag-to-resize panels and an unsaved changes confirmation dialog.',
+      'Added file and folder download from the remote file explorer (including download-folder-as-zip).'
+    ]
+  },
+  {
+    version: '0.1.0',
     date: '2026-06-11',
-    notes: ['Initial release with SSH/SFTP support, Monaco editor, integrated terminal, and Extensions panel.']
+    notes: [
+      'Initial release with SSH/SFTP support, Monaco editor, integrated terminal, and connection manager (context menu, edit flow, keyboard shortcuts, file uploads).'
+    ]
   }
 ]
 
