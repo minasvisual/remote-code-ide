@@ -123,6 +123,43 @@ export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager):
   })
 
   ipcMain.handle(
+    'sftp:openSaveDialog',
+    async (_e, { mode, suggestedName }: { mode: 'file' | 'folder'; suggestedName: string }) => {
+      const win = BrowserWindow.fromWebContents(_e.sender) ?? BrowserWindow.getFocusedWindow()
+      if (!win) return null
+      const result = await dialog.showSaveDialog(win, {
+        defaultPath: suggestedName,
+        filters: mode === 'folder' ? [{ name: 'Zip Archive', extensions: ['zip'] }] : undefined
+      })
+      return result.canceled || !result.filePath ? null : result.filePath
+    }
+  )
+
+  ipcMain.handle(
+    'sftp:downloadFile',
+    async (_e, sessionId: string, remotePath: string, localPath: string) => {
+      try {
+        await sftp.downloadFile(sessionId, remotePath, localPath)
+        return { success: true }
+      } catch (err: unknown) {
+        return { success: false, error: (err as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'sftp:downloadFolder',
+    async (_e, sessionId: string, remotePath: string, localPath: string) => {
+      try {
+        await sftp.downloadFolderAsZip(sessionId, remotePath, localPath)
+        return { success: true }
+      } catch (err: unknown) {
+        return { success: false, error: (err as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(
     'sftp:uploadFiles',
     async (_e, { sessionId, targetDir, localPaths }: { sessionId: string; targetDir: string; localPaths: string[] }) => {
       const sender = _e.sender

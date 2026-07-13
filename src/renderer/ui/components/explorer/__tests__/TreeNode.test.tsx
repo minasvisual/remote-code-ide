@@ -271,6 +271,81 @@ describe('TreeNode — upload here context menu', () => {
   })
 })
 
+describe('TreeNode — download', () => {
+  it('"Download" appears in file node context menu', async () => {
+    renderWithProviders(<TreeNode node={makeFile('index.ts', '/index.ts')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('index.ts') })
+    expect(screen.getByText('Download')).toBeInTheDocument()
+  })
+
+  it('"Download" appears in directory node context menu', async () => {
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    expect(screen.getByText('Download')).toBeInTheDocument()
+  })
+
+  it('downloads a file: opens save dialog with its name, then calls downloadFile', async () => {
+    mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\readme.md')
+    const node = makeFile('readme.md', '/readme.md')
+    renderWithProviders(<TreeNode node={node} sessionId="sess-1" />)
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('readme.md') })
+    await userEvent.click(screen.getByText('Download'))
+
+    await waitFor(() => {
+      expect(mockApi.sftp.openSaveDialog).toHaveBeenCalledWith('file', 'readme.md')
+      expect(mockApi.sftp.downloadFile).toHaveBeenCalledWith(
+        'sess-1', '/readme.md', 'C:\\Users\\me\\Downloads\\readme.md'
+      )
+      expect(mockApi.sftp.downloadFolder).not.toHaveBeenCalled()
+      expect(mockNotify).toHaveBeenCalledWith('success', expect.stringContaining('readme.md'))
+    })
+  })
+
+  it('downloads a folder: opens save dialog suggesting a .zip name, then calls downloadFolder', async () => {
+    mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\src.zip')
+    const node = makeDir('src', '/src')
+    renderWithProviders(<TreeNode node={node} sessionId="sess-1" />)
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    await userEvent.click(screen.getByText('Download'))
+
+    await waitFor(() => {
+      expect(mockApi.sftp.openSaveDialog).toHaveBeenCalledWith('folder', 'src.zip')
+      expect(mockApi.sftp.downloadFolder).toHaveBeenCalledWith(
+        'sess-1', '/src', 'C:\\Users\\me\\Downloads\\src.zip'
+      )
+      expect(mockApi.sftp.downloadFile).not.toHaveBeenCalled()
+      expect(mockNotify).toHaveBeenCalledWith('success', expect.stringContaining('src'))
+    })
+  })
+
+  it('cancelling the save dialog makes no download call', async () => {
+    mockApi.sftp.openSaveDialog.mockResolvedValue(null)
+    renderWithProviders(<TreeNode node={makeFile('app.ts', '/app.ts')} sessionId="sess-1" />)
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('app.ts') })
+    await userEvent.click(screen.getByText('Download'))
+
+    await waitFor(() => expect(mockApi.sftp.openSaveDialog).toHaveBeenCalled())
+    expect(mockApi.sftp.downloadFile).not.toHaveBeenCalled()
+    expect(mockApi.sftp.downloadFolder).not.toHaveBeenCalled()
+  })
+
+  it('shows an error notification when the download fails', async () => {
+    mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\app.ts')
+    mockApi.sftp.downloadFile.mockRejectedValue(new Error('Connection lost'))
+    renderWithProviders(<TreeNode node={makeFile('app.ts', '/app.ts')} sessionId="sess-1" />)
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('app.ts') })
+    await userEvent.click(screen.getByText('Download'))
+
+    await waitFor(() => {
+      expect(mockNotify).toHaveBeenCalledWith('error', expect.stringContaining('Connection lost'))
+    })
+  })
+})
+
 describe('TreeNode — rename', () => {
   it('right-click → rename → Enter with new name → api.sftp.rename called, onRename called', async () => {
     const node = makeFile('old.ts', '/old.ts')

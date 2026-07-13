@@ -2,9 +2,10 @@ import type { SFTPWrapper } from 'ssh2'
 import type { ISftpService } from '../../domain/ports/ISftpService'
 import type { FileNode } from '../../domain/entities/FileNode'
 import type { Ssh2Client } from '../ssh/Ssh2Client'
-import { appendFileSync } from 'fs'
-import { join } from 'path'
+import { appendFileSync, createWriteStream, promises as fsp } from 'fs'
+import { basename, join } from 'path'
 import { tmpdir } from 'os'
+import archiver from 'archiver'
 
 const LOG_FILE = join(tmpdir(), 'remotecodeide-debug.log')
 
@@ -259,4 +260,111 @@ export class Ssh2SftpService implements ISftpService {
       })
     })
   }
+
+  async downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<void> {
+    log(`downloadFile(${sessionId.slice(0, 8)}, ${remotePath} → ${localPath})`)
+    const sftp = await this.getSftp(sessionId)
+    try {
+      await new Promise<void>((resolve, reject) => {
+        let settled = false
+        const settle = (fn: () => void) => {
+          if (!settled) { settled = true; fn() }
+        }
+        const readStream = sftp.createReadStream(remotePath)
+        const writeStream = createWriteStream(localPath)
+        readStream.on('error', (err: Error) => {
+          log(`downloadFile read error: ${err.message}`)
+          settle(() => reject(err))
+        })
+        writeStream.on('error', (err: Error) => {
+          log(`downloadFile write error: ${err.message}`)
+          settle(() => reject(err))
+        })
+        writeStream.on('close', () => {
+          log(`downloadFile close — done`)
+          settle(() => resolve())
+        })
+        readStream.pipe(writeStream)
+      })
+    } catch (err) {
+      await this.cleanupPartialFile(localPath)
+      throw err
+    }
+  }
+
+  async downloadFolderAsZip(sessionId: string, remotePath: string, localZipPath: string): Promise<void> {
+    log(`downloadFolderAsZip(${sessionId.slice(0, 8)}, ${remotePath} → ${localZipPath})`)
+    try {
+      const rootName = basename(remotePath) || remotePath
+      const files = await this.collectFilesRecursive(sessionId, remotePath)
+      const sftp = await this.getSftp(sessionId)
+
+      await new Promise<void>((resolve, reject) => {
+        let settled = false
+        const settle = (fn: () => void) => {
+          if (!settled) { settled = true; fn() }
+        }
+
+        const output = createWriteStream(localZipPath)
+        const archive = archiver('zip')
+
+        output.on('close', () => {
+          log(`downloadFolderAsZip close — ${archive.pointer()} bytes written`)
+          settle(() => resolve())
+        })
+        output.on('error', (err: Error) => {
+          log(`downloadFolderAsZip output error: ${err.message}`)
+          settle(() => reject(err))
+        })
+        archive.on('error', (err: Error) => {
+          log(`downloadFolderAsZip archive error: ${err.message}`)
+          settle(() => reject(err))
+        })
+
+        archive.pipe(output)
+
+        for (const file of files) {
+          archive.append(sftp.createReadStream(file.path), { name: `${rootName}/${file.relativePath}` })
+        }
+
+        archive.finalize().catch((err: Error) => {
+          log(`downloadFolderAsZip finalize error: ${err.message}`)
+          settle(() => reject(err))
+        })
+      })
+    } catch (err) {
+      await this.cleanupPartialFile(localZipPath)
+      throw err
+    }
+  }
+
+  private async collectFilesRecursive(
+    sessionId: string,
+    rootPath: string
+  ): Promise<Array<{ path: string; relativePath: string }>> {
+    const results: Array<{ path: string; relativePath: string }> = []
+    const entries = await this.listDir(sessionId, rootPath)
+    for (const entry of entries) {
+      if (entry.type === 'directory') {
+        results.push(...(await this.collectFilesRecursive(sessionId, entry.path)))
+      } else if (entry.type === 'file') {
+        results.push({ path: entry.path, relativePath: remoteRelative(rootPath, entry.path) })
+      }
+      // symlinks are intentionally skipped — not followed, to avoid cycles
+    }
+    return results
+  }
+
+  private async cleanupPartialFile(localPath: string): Promise<void> {
+    try {
+      await fsp.unlink(localPath)
+    } catch {
+      // nothing to clean up — file was never created
+    }
+  }
+}
+
+function remoteRelative(root: string, full: string): string {
+  const prefix = root === '/' ? '/' : `${root}/`
+  return full.startsWith(prefix) ? full.slice(prefix.length) : full.replace(/^\//, '')
 }

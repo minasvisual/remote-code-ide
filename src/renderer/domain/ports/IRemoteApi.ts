@@ -49,6 +49,9 @@ export interface IRemoteApi {
     openUploadDialog(mode: 'files' | 'folder'): Promise<string[] | null>
     uploadFiles(sessionId: string, targetDir: string, localPaths: string[]): Promise<void>
     onUploadProgress(callback: (event: UploadProgressEvent) => void): () => void
+    openSaveDialog(mode: 'file' | 'folder', suggestedName: string): Promise<string | null>
+    downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<void>
+    downloadFolder(sessionId: string, remotePath: string, localPath: string): Promise<void>
   }
   terminal: {
     create(sessionId: string, cols: number, rows: number, initialDir?: string): Promise<string>

@@ -42,6 +42,9 @@ export function createMockApi(): IRemoteApi {
       openUploadDialog: vi.fn().mockResolvedValue(null),
       uploadFiles: vi.fn().mockResolvedValue(undefined),
       onUploadProgress: vi.fn().mockReturnValue(() => {}),
+      openSaveDialog: vi.fn().mockResolvedValue(null),
+      downloadFile: vi.fn().mockResolvedValue(undefined),
+      downloadFolder: vi.fn().mockResolvedValue(undefined),
     },
     terminal: {
       create: vi.fn().mockResolvedValue('term-1'),

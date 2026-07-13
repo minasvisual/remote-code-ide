@@ -39,6 +39,20 @@ const api: IRemoteApi = {
       const listener = (_e: Electron.IpcRendererEvent, event: UploadProgressEvent) => callback(event)
       ipcRenderer.on('sftp:uploadProgress', listener)
       return () => ipcRenderer.removeListener('sftp:uploadProgress', listener)
+    },
+    openSaveDialog: (mode, suggestedName) =>
+      ipcRenderer.invoke('sftp:openSaveDialog', { mode, suggestedName }),
+    downloadFile: async (sessionId, remotePath, localPath) => {
+      const result = await ipcRenderer.invoke('sftp:downloadFile', sessionId, remotePath, localPath)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+    },
+    downloadFolder: async (sessionId, remotePath, localPath) => {
+      const result = await ipcRenderer.invoke('sftp:downloadFolder', sessionId, remotePath, localPath)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
     }
   },
   terminal: {

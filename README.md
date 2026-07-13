@@ -78,6 +78,26 @@ npm run dist:linux
 
 Distributable packages are written to the `release/` directory.
 
+## Releasing (Windows .exe)
+
+Pushing a `v*.*.*` tag triggers `.github/workflows/release.yml`, which builds the NSIS
+installer on a `windows-latest` GitHub Actions runner and publishes it as a GitHub
+Release — the release page gets a direct download link for the `.exe` automatically.
+
+```bash
+npm version patch   # or minor / major — bumps package.json
+git push origin main --follow-tags
+```
+
+To build and publish from your own machine instead (requires the `gh` CLI,
+`gh auth login`, and a clean working tree):
+
+```bash
+npm run release:patch   # or release:minor / release:major / release
+```
+
+See `scripts/release.js` for what the local flow does.
+
 ## Type Checking
 
 ```bash

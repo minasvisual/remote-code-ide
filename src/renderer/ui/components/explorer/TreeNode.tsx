@@ -246,6 +246,23 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
     setNewFolderError(undefined)
   }
 
+  const handleDownloadClick = async () => {
+    const isFolder = node.type === 'directory'
+    const suggestedName = isFolder ? `${node.name}.zip` : node.name
+    const localPath = await api.sftp.openSaveDialog(isFolder ? 'folder' : 'file', suggestedName)
+    if (!localPath) return
+    try {
+      if (isFolder) {
+        await api.sftp.downloadFolder(sessionId, node.path, localPath)
+      } else {
+        await api.sftp.downloadFile(sessionId, node.path, localPath)
+      }
+      notify('success', `Downloaded ${node.name}`)
+    } catch (err: unknown) {
+      notify('error', `Failed to download ${node.name}: ${(err as Error).message}`)
+    }
+  }
+
   const indent = depth * 12
 
   const deleteMessage = deleteTarget?.type === 'directory'
@@ -259,6 +276,8 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
   const contextMenuItems: import('../commons/ContextMenu').ContextMenuItem[] = [
     { label: 'Rename', onClick: handleRenameClick },
     { label: 'Delete', onClick: handleDeleteClick },
+    { type: 'divider' as const },
+    { label: 'Download', onClick: handleDownloadClick },
     { type: 'divider' as const },
     { label: 'Upload files here', onClick: () => onUpload?.(uploadTargetDir, 'files') },
     { label: 'Upload folder here', onClick: () => onUpload?.(uploadTargetDir, 'folder') },

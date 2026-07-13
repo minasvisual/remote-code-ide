@@ -11,4 +11,6 @@ export interface ISftpService {
   createFile(sessionId: string, path: string): Promise<void>
   uploadFile(sessionId: string, remotePath: string, content: Buffer): Promise<void>
   mkdirp(sessionId: string, path: string): Promise<void>
+  downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<void>
+  downloadFolderAsZip(sessionId: string, remotePath: string, localZipPath: string): Promise<void>
 }
