@@ -77,8 +77,9 @@ if (dirty) {
 }
 
 // --- tag + push ---
-run(`git tag ${tag}`);
-run('git push origin main --follow-tags');
+run(`git tag -a ${tag} -m "${tag}"`);
+run('git push origin main');
+run(`git push origin ${tag}`);
 
 // --- GitHub release ---
 console.log(`\nCreating GitHub release ${tag}...`);

@@ -61,8 +61,9 @@ if (runCapture('git status --porcelain')) {
 }
 
 // --- tag + push ---
-run(`git tag ${tag}`);
-run('git push origin main --follow-tags');
+run(`git tag -a ${tag} -m "${tag}"`);
+run('git push origin main');
+run(`git push origin ${tag}`);
 
 console.log(`\nPushed ${tag} — the release workflow will build and publish automatically.`);
 console.log('Track progress in the Actions tab (or: gh run watch).');

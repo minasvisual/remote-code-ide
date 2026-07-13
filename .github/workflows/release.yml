@@ -32,7 +32,9 @@ jobs:
             ${{ runner.os }}-electron-builder-
 
       - name: Install dependencies
-        run: npm ci --omit=optional
+        run: |
+          npm ci --ignore-scripts
+          npm rebuild electron esbuild ssh2
 
       - name: Build Windows installer
         run: npm run dist:win
