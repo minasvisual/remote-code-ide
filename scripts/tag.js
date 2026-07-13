@@ -56,7 +56,7 @@ console.log(`\n  Tagging ${tag}\n`);
 
 // --- commit version bump, if any ---
 if (runCapture('git status --porcelain')) {
-  run('git add package.json');
+  run('git add package.json package-lock.json');
   run(`git commit -m "chore: release ${tag}"`);
 }
 

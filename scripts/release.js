@@ -72,7 +72,7 @@ if (!existsSync(exePath)) {
 // --- commit any version bump changes ---
 const dirty = runCapture('git status --porcelain');
 if (dirty) {
-  run('git add package.json');
+  run('git add package.json package-lock.json');
   run(`git commit -m "chore: release ${tag}"`);
 }
 
