@@ -38,7 +38,11 @@
     "release": "node scripts/release.js",
     "release:patch": "node scripts/release.js patch",
     "release:minor": "node scripts/release.js minor",
-    "release:major": "node scripts/release.js major"
+    "release:major": "node scripts/release.js major",
+    "tag": "node scripts/tag.js",
+    "tag:patch": "node scripts/tag.js patch",
+    "tag:minor": "node scripts/tag.js minor",
+    "tag:major": "node scripts/tag.js major"
   },
   "dependencies": {
     "archiver": "^7.0.1",
