@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FileExplorer } from '../FileExplorer'
@@ -52,6 +52,7 @@ beforeEach(() => {
     notify: vi.fn(),
     dismissNotification: vi.fn(),
     openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+    clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
   })
 })
 
@@ -106,6 +107,7 @@ describe('FileExplorer', () => {
       notify: vi.fn(),
       dismissNotification: vi.fn(),
       openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+    clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
     })
     mockApi.sftp.listDir.mockResolvedValue([])
     renderWithProviders(<FileExplorer />)
@@ -140,6 +142,7 @@ describe('FileExplorer', () => {
       notify: mockNotify,
       dismissNotification: vi.fn(),
       openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+    clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
       terminalTargetDir: null,
     })
     mockApi.sftp.listDir.mockRejectedValue(new Error('No such file or directory'))
@@ -167,6 +170,7 @@ describe('FileExplorer', () => {
       notify: vi.fn(),
       dismissNotification: vi.fn(),
       openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+    clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
       terminalTargetDir: null,
     })
     mockApi.sftp.listDir.mockRejectedValue(new Error('Permission denied'))
@@ -225,8 +229,84 @@ describe('FileExplorer', () => {
       notify: vi.fn(),
       dismissNotification: vi.fn(),
       openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+    clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
     })
     const { container } = renderWithProviders(<FileExplorer />)
     expect(container.firstChild).toBeNull()
+  })
+})
+
+describe('FileExplorer — background context menu (root paste)', () => {
+  it('does not show "Paste" on empty-space right-click with an empty clipboard', async () => {
+    mockApi.sftp.listDir.mockResolvedValue([])
+    const { container } = renderWithProviders(<FileExplorer />)
+    await waitFor(() => expect(mockApi.sftp.listDir).toHaveBeenCalled())
+
+    const scrollArea = container.querySelector('.overflow-y-auto') as HTMLElement
+    fireEvent.contextMenu(scrollArea)
+
+    expect(screen.queryByText('Paste')).not.toBeInTheDocument()
+  })
+
+  it('shows "Paste" on empty-space right-click with a clipboard entry, targeting the root dir', async () => {
+    vi.mocked(useApp).mockReturnValue({
+      activeSession: mockSession,
+      connections: [],
+      notifications: [],
+      isConnecting: false,
+      terminalTargetDir: null,
+      clipboard: { sessionId: 'sess-1', path: '/dir/other.ts', name: 'other.ts', type: 'file' },
+      loadConnections: vi.fn(),
+      saveConnection: vi.fn(),
+      updateConnection: vi.fn(),
+      deleteConnection: vi.fn(),
+      testConnection: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      notify: vi.fn(),
+      dismissNotification: vi.fn(),
+      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+      copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
+    })
+    mockApi.sftp.listDir.mockResolvedValue([])
+    const { container } = renderWithProviders(<FileExplorer />)
+    await waitFor(() => expect(mockApi.sftp.listDir).toHaveBeenCalled())
+
+    const scrollArea = container.querySelector('.overflow-y-auto') as HTMLElement
+    fireEvent.contextMenu(scrollArea)
+    await userEvent.click(screen.getByText('Paste'))
+
+    await waitFor(() => {
+      expect(mockApi.sftp.copy).toHaveBeenCalledWith('sess-1', '/dir/other.ts', '/other.ts', 'file', false)
+    })
+  })
+
+  it('right-clicking a file row does not open the background context menu', async () => {
+    vi.mocked(useApp).mockReturnValue({
+      activeSession: mockSession,
+      connections: [],
+      notifications: [],
+      isConnecting: false,
+      terminalTargetDir: null,
+      clipboard: { sessionId: 'sess-1', path: '/other.ts', name: 'other.ts', type: 'file' },
+      loadConnections: vi.fn(),
+      saveConnection: vi.fn(),
+      updateConnection: vi.fn(),
+      deleteConnection: vi.fn(),
+      testConnection: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      notify: vi.fn(),
+      dismissNotification: vi.fn(),
+      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+      copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
+    })
+    mockApi.sftp.listDir.mockResolvedValue([makeFile('readme.md', '/readme.md')])
+    renderWithProviders(<FileExplorer />)
+    await waitFor(() => screen.getByText('readme.md'))
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('readme.md') })
+
+    expect(screen.queryByText('Paste')).not.toBeInTheDocument()
   })
 })

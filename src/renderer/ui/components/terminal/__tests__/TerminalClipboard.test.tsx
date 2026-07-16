@@ -45,12 +45,13 @@ const mockNotify = vi.fn()
 
 const baseAppValue = {
   connections: [], notifications: [], isConnecting: false,
-  terminalTargetDir: null,
+  terminalTargetDir: null, clipboard: null,
   loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
   deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
   disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(),
   openTerminalAt: vi.fn(),
   registerBeforeDisconnect: vi.fn(),
+  copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
 }
 
 let mockApi: ReturnType<typeof createMockApi>

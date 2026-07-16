@@ -52,6 +52,13 @@ export interface IRemoteApi {
     openSaveDialog(mode: 'file' | 'folder', suggestedName: string): Promise<string | null>
     downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<void>
     downloadFolder(sessionId: string, remotePath: string, localPath: string): Promise<void>
+    copy(
+      sessionId: string,
+      sourcePath: string,
+      destPath: string,
+      type: 'file' | 'directory',
+      overwrite?: boolean
+    ): Promise<void>
   }
   terminal: {
     create(sessionId: string, cols: number, rows: number, initialDir?: string): Promise<string>

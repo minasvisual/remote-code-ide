@@ -7,6 +7,7 @@ import { Button } from '../commons/Button'
 import { getRemoteApi } from '../../../adapters/api/WindowRemoteApi'
 import { useEditor } from '../../../application/contexts/EditorContext'
 import { useApp } from '../../../application/contexts/AppContext'
+import { usePaste } from './usePaste'
 import type { FileNode } from '../../../domain/entities/FileNode'
 
 interface Props {
@@ -36,7 +37,7 @@ function getFileIcon(filename: string): string {
 export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpload, onOpenTerminal, refreshSignal, refreshTarget }: Props) {
   const api = getRemoteApi()
   const { openFile } = useEditor()
-  const { notify } = useApp()
+  const { notify, clipboard, copyToClipboard } = useApp()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [children, setChildren] = useState<FileNode[]>(node.children ?? [])
@@ -73,6 +74,12 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
       setIsLoading(false)
     }
   }, [api, sessionId, node.path, node.name, notify])
+
+  const handlePasted = useCallback((targetDir: string) => {
+    if (targetDir === node.path && loadedRef.current) doRefresh()
+  }, [node.path, doRefresh])
+
+  const { paste, conflict, confirmOverwrite, cancelOverwrite } = usePaste(handlePasted)
 
   // Cascade refresh from parent: re-fetch only if this dir was already loaded
   useEffect(() => {
@@ -137,6 +144,12 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
 
   const handleDeleteClick = () => {
     setDeleteTarget(node)
+  }
+
+  const handleCopyClick = () => {
+    if (node.type !== 'file' && node.type !== 'directory') return
+    copyToClipboard({ sessionId, path: node.path, name: node.name, type: node.type })
+    notify('info', `Copied "${node.name}"`)
   }
 
   const handleDeleteConfirm = async () => {
@@ -273,7 +286,12 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
     ? node.path
     : node.path.substring(0, node.path.lastIndexOf('/')) || '/'
 
+  const canCopy = node.type === 'file' || node.type === 'directory'
+  const canPaste = node.type === 'directory' && clipboard !== null && clipboard.sessionId === sessionId
+
   const contextMenuItems: import('../commons/ContextMenu').ContextMenuItem[] = [
+    ...(canCopy ? [{ label: 'Copy', onClick: handleCopyClick }] : []),
+    ...(canPaste ? [{ label: 'Paste', onClick: () => paste(node.path) }] : []),
     { label: 'Rename', onClick: handleRenameClick },
     { label: 'Delete', onClick: handleDeleteClick },
     { type: 'divider' as const },
@@ -351,6 +369,23 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
           }
         >
           <p className="text-sm text-ide-text">{deleteMessage}</p>
+        </Modal>
+      )}
+
+      {conflict && conflict.targetDir === node.path && (
+        <Modal
+          title="Confirm Overwrite"
+          onClose={cancelOverwrite}
+          footer={
+            <>
+              <Button variant="ghost" onClick={cancelOverwrite}>Cancel</Button>
+              <Button variant="danger" onClick={confirmOverwrite}>Overwrite</Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ide-text">
+            An item named "{conflict.name}" already exists here. Overwrite it?
+          </p>
         </Modal>
       )}
 

@@ -33,7 +33,10 @@ function baseUseApp() {
     dismissNotification: vi.fn(),
     openTerminalAt: vi.fn(),
     terminalTargetDir: null,
+    clipboard: null,
     registerBeforeDisconnect: vi.fn(),
+    copyToClipboard: vi.fn(),
+    clearClipboard: vi.fn(),
   }
 }
 

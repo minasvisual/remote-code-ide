@@ -362,6 +362,86 @@ export class Ssh2SftpService implements ISftpService {
       // nothing to clean up — file was never created
     }
   }
+
+  private async statSafe(sessionId: string, path: string): Promise<import('ssh2').Stats | null> {
+    const sftp = await this.getSftp(sessionId)
+    return new Promise((resolve) => {
+      sftp.stat(path, (err, stats) => {
+        resolve(err ? null : stats)
+      })
+    })
+  }
+
+  private async copyFile(sessionId: string, sourcePath: string, destPath: string): Promise<void> {
+    log(`copyFile(${sessionId.slice(0, 8)}, ${sourcePath} → ${destPath})`)
+    const sftp = await this.getSftp(sessionId)
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const settle = (fn: () => void) => {
+        if (!settled) { settled = true; fn() }
+      }
+      const readStream = sftp.createReadStream(sourcePath)
+      const writeStream = sftp.createWriteStream(destPath)
+      readStream.on('error', (err: Error) => {
+        log(`copyFile read error: ${err.message}`)
+        settle(() => reject(err))
+      })
+      writeStream.on('error', (err: Error) => {
+        log(`copyFile write error: ${err.message}`)
+        settle(() => reject(err))
+      })
+      writeStream.on('close', () => {
+        log(`copyFile close — done`)
+        settle(() => resolve())
+      })
+      readStream.pipe(writeStream)
+    })
+  }
+
+  async copy(
+    sessionId: string,
+    sourcePath: string,
+    destPath: string,
+    type: 'file' | 'directory',
+    overwrite = false
+  ): Promise<void> {
+    log(`copy(${sessionId.slice(0, 8)}, ${sourcePath} → ${destPath}, type=${type}, overwrite=${overwrite})`)
+
+    if (destPath === sourcePath || destPath.startsWith(`${sourcePath}/`)) {
+      const err = new Error('Cannot paste a folder into itself or one of its own subfolders')
+      log(`copy → rejected: ${destPath} is ${sourcePath} or a descendant of it`)
+      throw err
+    }
+
+    const existing = await this.statSafe(sessionId, destPath)
+    if (existing) {
+      if (!overwrite) {
+        log(`copy → DEST_EXISTS at ${destPath}`)
+        throw Object.assign(new Error('Destination already exists'), { code: 'DEST_EXISTS' })
+      }
+      const isDir = (existing.mode & 0o170000) === 0o040000
+      log(`copy → overwrite requested, removing existing ${isDir ? 'directory' : 'file'} at ${destPath}`)
+      if (isDir) {
+        await this.deleteRecursive(sessionId, destPath)
+      } else {
+        await this.delete(sessionId, destPath)
+      }
+    }
+
+    if (type === 'file') {
+      await this.copyFile(sessionId, sourcePath, destPath)
+    } else {
+      await this.mkdir(sessionId, destPath)
+      const entries = await this.listDir(sessionId, sourcePath)
+      for (const entry of entries) {
+        if (entry.type !== 'file' && entry.type !== 'directory') continue // symlinks skipped
+        const childDest = destPath === '/' ? `/${entry.name}` : `${destPath}/${entry.name}`
+        await this.copy(sessionId, entry.path, childDest, entry.type, true)
+      }
+    }
+
+    log(`copy(${sessionId.slice(0, 8)}) → done`)
+  }
 }
 
 function remoteRelative(root: string, full: string): string {

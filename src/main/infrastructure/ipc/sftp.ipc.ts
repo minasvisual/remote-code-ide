@@ -111,6 +111,26 @@ export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager):
     }
   })
 
+  ipcMain.handle(
+    'sftp:copy',
+    async (
+      _e,
+      sessionId: string,
+      sourcePath: string,
+      destPath: string,
+      type: 'file' | 'directory',
+      overwrite?: boolean
+    ) => {
+      try {
+        await sftp.copy(sessionId, sourcePath, destPath, type, overwrite)
+        return { success: true }
+      } catch (err: unknown) {
+        const e = err as { code?: string; message: string }
+        return { success: false, code: e.code, error: e.message }
+      }
+    }
+  )
+
   ipcMain.handle('sftp:openUploadDialog', async (_e, mode: 'files' | 'folder') => {
     const win = BrowserWindow.fromWebContents(_e.sender) ?? BrowserWindow.getFocusedWindow()
     if (!win) return null

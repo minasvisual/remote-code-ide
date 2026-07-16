@@ -27,21 +27,24 @@ vi.mock('../../../../application/contexts/EditorContext', async (importOriginal)
 })
 
 import { useApp } from '../../../../application/contexts/AppContext'
+import type { ClipboardEntry } from '../../../../application/contexts/AppContext'
 import { useEditor } from '../../../../application/contexts/EditorContext'
 
 const mockOpenFile = vi.fn()
 const mockNotify = vi.fn()
+const mockCopyToClipboard = vi.fn()
 
 beforeEach(() => {
   mockApi = createMockApi()
   vi.stubGlobal('api', mockApi)
   vi.mocked(useApp).mockReturnValue({
     activeSession: null, connections: [], notifications: [], isConnecting: false,
-    terminalTargetDir: null,
+    terminalTargetDir: null, clipboard: null,
     loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
     deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
     disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(),
     openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+    copyToClipboard: mockCopyToClipboard, clearClipboard: vi.fn(),
   })
   vi.mocked(useEditor).mockReturnValue({
     tabs: [], activeTabId: null, pendingClose: null, openFile: mockOpenFile,
@@ -55,6 +58,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   mockOpenFile.mockReset()
   mockNotify.mockReset()
+  mockCopyToClipboard.mockReset()
 })
 
 describe('TreeNode — file', () => {
@@ -391,5 +395,88 @@ describe('TreeNode — rename', () => {
 
     expect(mockApi.sftp.rename).not.toHaveBeenCalled()
     expect(mockNotify).toHaveBeenCalledWith('error', 'Name cannot be empty')
+  })
+})
+
+function mockUseAppValue(clipboard: ClipboardEntry | null) {
+  vi.mocked(useApp).mockReturnValue({
+    activeSession: null, connections: [], notifications: [], isConnecting: false,
+    terminalTargetDir: null, clipboard,
+    loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
+    deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
+    disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(),
+    openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
+    copyToClipboard: mockCopyToClipboard, clearClipboard: vi.fn(),
+  })
+}
+
+describe('TreeNode — copy/paste', () => {
+  it('"Copy" appears in both file and directory context menus', async () => {
+    renderWithProviders(<TreeNode node={makeFile('a.ts', '/a.ts')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('a.ts') })
+    expect(screen.getByText('Copy')).toBeInTheDocument()
+  })
+
+  it('clicking "Copy" stores the entry and notifies', async () => {
+    const node = makeFile('a.ts', '/dir/a.ts')
+    renderWithProviders(<TreeNode node={node} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('a.ts') })
+    await userEvent.click(screen.getByText('Copy'))
+
+    expect(mockCopyToClipboard).toHaveBeenCalledWith({
+      sessionId: 'sess-1', path: '/dir/a.ts', name: 'a.ts', type: 'file',
+    })
+    expect(mockNotify).toHaveBeenCalledWith('info', expect.stringContaining('a.ts'))
+  })
+
+  it('"Paste" absent from a directory context menu with an empty clipboard', async () => {
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    expect(screen.queryByText('Paste')).not.toBeInTheDocument()
+  })
+
+  it('"Paste" present in a directory context menu with a matching-session clipboard entry', async () => {
+    mockUseAppValue({ sessionId: 'sess-1', path: '/other.ts', name: 'other.ts', type: 'file' })
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    expect(screen.getByText('Paste')).toBeInTheDocument()
+  })
+
+  it('"Paste" absent when the clipboard entry belongs to a different session', async () => {
+    mockUseAppValue({ sessionId: 'sess-2', path: '/other.ts', name: 'other.ts', type: 'file' })
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    expect(screen.queryByText('Paste')).not.toBeInTheDocument()
+  })
+
+  it('successful paste calls api.sftp.copy with overwrite: false', async () => {
+    mockUseAppValue({ sessionId: 'sess-1', path: '/other.ts', name: 'other.ts', type: 'file' })
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    await userEvent.click(screen.getByText('Paste'))
+
+    await waitFor(() => {
+      expect(mockApi.sftp.copy).toHaveBeenCalledWith('sess-1', '/other.ts', '/src/other.ts', 'file', false)
+    })
+  })
+
+  it('DEST_EXISTS opens the overwrite confirmation modal, and confirming retries with overwrite: true', async () => {
+    mockUseAppValue({ sessionId: 'sess-1', path: '/other.ts', name: 'other.ts', type: 'file' })
+    mockApi.sftp.copy.mockRejectedValueOnce(
+      Object.assign(new Error('Destination already exists'), { code: 'DEST_EXISTS' })
+    )
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    await userEvent.click(screen.getByText('Paste'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/already exists here/)).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Overwrite' }))
+
+    await waitFor(() => {
+      expect(mockApi.sftp.copy).toHaveBeenLastCalledWith('sess-1', '/other.ts', '/src/other.ts', 'file', true)
+    })
   })
 })

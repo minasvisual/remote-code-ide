@@ -13,4 +13,15 @@ export interface ISftpService {
   mkdirp(sessionId: string, path: string): Promise<void>
   downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<void>
   downloadFolderAsZip(sessionId: string, remotePath: string, localZipPath: string): Promise<void>
+  /**
+   * Recursively copies a file or directory server-side over SFTP.
+   * Throws an error with `code: 'DEST_EXISTS'` if `destPath` already exists and `overwrite` is not `true`.
+   */
+  copy(
+    sessionId: string,
+    sourcePath: string,
+    destPath: string,
+    type: 'file' | 'directory',
+    overwrite?: boolean
+  ): Promise<void>
 }

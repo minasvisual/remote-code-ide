@@ -53,6 +53,12 @@ const api: IRemoteApi = {
       if (!result.success) {
         throw new Error(result.error)
       }
+    },
+    copy: async (sessionId, sourcePath, destPath, type, overwrite) => {
+      const result = await ipcRenderer.invoke('sftp:copy', sessionId, sourcePath, destPath, type, overwrite)
+      if (!result.success) {
+        throw Object.assign(new Error(result.error), { code: result.code })
+      }
     }
   },
   terminal: {

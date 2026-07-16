@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { TreeNode } from './TreeNode'
 import { Spinner } from '../commons/Spinner'
+import { ContextMenu } from '../commons/ContextMenu'
+import { Modal } from '../commons/Modal'
+import { Button } from '../commons/Button'
 import { NewFileDialog } from '../commons/NewFileDialog'
 import { UploadDialog } from '../commons/UploadDialog'
 import type { UploadEntry } from '../commons/UploadDialog'
 import { getRemoteApi } from '../../../adapters/api/WindowRemoteApi'
 import { useApp } from '../../../application/contexts/AppContext'
+import { usePaste } from './usePaste'
 import type { FileNode } from '../../../domain/entities/FileNode'
 
 export function FileExplorer() {
   const api = getRemoteApi()
-  const { activeSession, notify, disconnect, openTerminalAt } = useApp()
+  const { activeSession, notify, disconnect, openTerminalAt, clipboard } = useApp()
   const [rootNodes, setRootNodes] = useState<FileNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newFileTargetDir, setNewFileTargetDir] = useState<string | null>(null)
@@ -20,6 +24,7 @@ export function FileExplorer() {
   const [uploadEntries, setUploadEntries] = useState<UploadEntry[]>([])
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [refreshTarget, setRefreshTarget] = useState<{ path: string; tick: number } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const uploadUnsubscribeRef = useRef<(() => void) | null>(null)
   const uploadTargetDirRef = useRef<string>('/')
 
@@ -147,6 +152,17 @@ export function FileExplorer() {
     }
   }, [activeSession])
 
+  const handleRootPasted = useCallback(() => {
+    load()
+  }, [activeSession])
+
+  const { paste: pasteAtRoot, conflict: rootConflict, confirmOverwrite: confirmRootOverwrite, cancelOverwrite: cancelRootOverwrite } = usePaste(handleRootPasted)
+
+  const handleBackgroundContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY })
+  }
+
   if (!activeSession) return null
 
   const rootDir = activeSession.initialDirectory || '/'
@@ -205,7 +221,7 @@ export function FileExplorer() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" onContextMenu={handleBackgroundContextMenu}>
         {isLoading ? (
           <div className="flex justify-center pt-8">
             <Spinner />
@@ -225,6 +241,31 @@ export function FileExplorer() {
           ))
         )}
       </div>
+
+      {contextMenu && clipboard && (
+        <ContextMenu
+          position={contextMenu}
+          items={[{ label: 'Paste', onClick: () => pasteAtRoot(rootDir) }]}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {rootConflict && (
+        <Modal
+          title="Confirm Overwrite"
+          onClose={cancelRootOverwrite}
+          footer={
+            <>
+              <Button variant="ghost" onClick={cancelRootOverwrite}>Cancel</Button>
+              <Button variant="danger" onClick={confirmRootOverwrite}>Overwrite</Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ide-text">
+            An item named "{rootConflict.name}" already exists here. Overwrite it?
+          </p>
+        </Modal>
+      )}
 
       {newFileTargetDir && (
         <NewFileDialog

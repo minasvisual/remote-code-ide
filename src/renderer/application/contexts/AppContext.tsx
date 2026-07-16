@@ -14,12 +14,20 @@ interface TerminalTarget {
   tick: number
 }
 
+export interface ClipboardEntry {
+  sessionId: string
+  path: string
+  name: string
+  type: 'file' | 'directory'
+}
+
 interface AppContextValue {
   connections: Connection[]
   activeSession: ActiveSession | null
   notifications: Notification[]
   isConnecting: boolean
   terminalTargetDir: TerminalTarget | null
+  clipboard: ClipboardEntry | null
   loadConnections(): Promise<void>
   saveConnection(conn: NewConnection): Promise<Connection>
   updateConnection(conn: Connection): Promise<Connection>
@@ -31,6 +39,8 @@ interface AppContextValue {
   dismissNotification(id: string): void
   openTerminalAt(path: string): void
   registerBeforeDisconnect(cb: (sessionId: string) => Promise<boolean>): void
+  copyToClipboard(entry: ClipboardEntry): void
+  clearClipboard(): void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -42,6 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isConnecting, setIsConnecting] = useState(false)
   const [terminalTargetDir, setTerminalTargetDir] = useState<TerminalTarget | null>(null)
+  const [clipboard, setClipboard] = useState<ClipboardEntry | null>(null)
   const beforeDisconnectRef = useRef<((sessionId: string) => Promise<boolean>) | null>(null)
 
   const notify = useCallback((type: Notification['type'], message: string) => {
@@ -63,6 +74,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadConnections()
     api.ssh.onDisconnected((sessionId) => {
       setActiveSession((prev) => (prev?.sessionId === sessionId ? null : prev))
+      setClipboard((prev) => (prev?.sessionId === sessionId ? null : prev))
       notify('info', 'SSH session disconnected')
     })
   }, [])
@@ -134,11 +146,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await api.ssh.disconnect(activeSession.sessionId)
     setActiveSession(null)
     setTerminalTargetDir(null)
+    setClipboard(null)
     notify('info', 'Disconnected')
   }, [api, activeSession, notify])
 
   const openTerminalAt = useCallback((path: string) => {
     setTerminalTargetDir((prev) => ({ path, tick: (prev?.tick ?? 0) + 1 }))
+  }, [])
+
+  const copyToClipboard = useCallback((entry: ClipboardEntry) => {
+    setClipboard(entry)
+  }, [])
+
+  const clearClipboard = useCallback(() => {
+    setClipboard(null)
   }, [])
 
   return (
@@ -149,6 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notifications,
         isConnecting,
         terminalTargetDir,
+        clipboard,
         loadConnections,
         saveConnection,
         updateConnection,
@@ -159,7 +181,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notify,
         dismissNotification,
         openTerminalAt,
-        registerBeforeDisconnect
+        registerBeforeDisconnect,
+        copyToClipboard,
+        clearClipboard
       }}
     >
       {children}
