@@ -6,15 +6,25 @@ A desktop remote IDE with SSH/SFTP connections, Monaco editor (VS Code engine), 
 
 ![Remote Code IDE](resources/print-2.png)
 
+## Download
+
+Grab the latest Windows installer from the [GitHub Releases page](https://github.com/minasvisual/remote-code-ide/releases).
+
 ## Features
 
-- **SSH connections** with secure credential storage (OS keychain via `safeStorage`)
-- **Full file explorer** over SFTP with lazy loading
+- **SSH connections** with secure credential storage (OS keychain via `safeStorage`), a per-connection initial directory, and a connection context menu (edit, delete, quick actions)
+- **Full file explorer** over SFTP with lazy loading and context menus for new file/folder, rename, and delete
+- **Copy & paste** files and folders in the explorer — recursive server-side copy over SFTP, with overwrite confirmation and paste-into-self protection
+- **Find in Folder** — recursive content search across a remote directory tree, with incremental results and jump-to-file
+- **File properties** modal — inspect size, permissions, owner/group, timestamps, and symlink target without downloading
 - **Monaco editor** (VS Code engine) with syntax highlighting for 50+ languages
-- **Integrated terminal** (xterm.js) per SSH session
-- **Multi-tab editing** with dirty state tracking and auto-save via `Ctrl+S`
+- **Multi-tab editing** with dirty state tracking, auto-save via `Ctrl+S`, and persisted editor/panel layout across sessions
+- **Integrated terminal** (xterm.js) per SSH session, with copy/paste support and "Open in Terminal" from the file explorer
 - **VSCode extension support** via OpenVSX registry browser
-- **File upload/download** with progress tracking (5 MB warning threshold)
+- **File upload/download** with byte-level progress, cancellation, and a 5 MB warning threshold
+- **Safe window close** — in-progress downloads are confirmed and cleaned up before the app quits
+- Unsaved-changes prompts and graceful disconnect handling
+- **About panel** with app/version info
 - Cross-platform: **Windows**, **macOS**, **Linux**
  
 # Contributing
