@@ -1,11 +1,23 @@
 import type { SFTPWrapper } from 'ssh2'
-import type { ISftpService } from '../../domain/ports/ISftpService'
+import type { ISftpService, DownloadOptions, FileInfo, SearchOptions, SearchFileMatch, SearchLineMatch } from '../../domain/ports/ISftpService'
 import type { FileNode } from '../../domain/entities/FileNode'
 import type { Ssh2Client } from '../ssh/Ssh2Client'
 import { appendFileSync, createWriteStream, promises as fsp } from 'fs'
 import { basename, join } from 'path'
 import { tmpdir } from 'os'
 import archiver from 'archiver'
+
+const MAX_SEARCH_FILE_SIZE = 2 * 1024 * 1024
+const MAX_REPORTED_MATCHES_PER_FILE = 10
+const MAX_MATCH_TEXT_LENGTH = 200
+
+function cancelledError(): Error {
+  return Object.assign(new Error('Download cancelled'), { code: 'CANCELLED' })
+}
+
+function cancelledSearchError(): Error {
+  return Object.assign(new Error('Search cancelled'), { code: 'CANCELLED' })
+}
 
 const LOG_FILE = join(tmpdir(), 'remotecodeide-debug.log')
 
@@ -117,6 +129,54 @@ export class Ssh2SftpService implements ISftpService {
         resolve(nodes)
       })
     })
+  }
+
+  async getFileInfo(sessionId: string, path: string): Promise<FileInfo> {
+    log(`getFileInfo(${sessionId.slice(0, 8)}, ${path})`)
+    const sftp = await this.getSftp(sessionId)
+    const stats = await new Promise<import('ssh2').Stats>((resolve, reject) => {
+      sftp.stat(path, (err, stats) => {
+        if (err) {
+          log(`getFileInfo stat error: ${err.message}`)
+          reject(err)
+        } else {
+          resolve(stats)
+        }
+      })
+    })
+
+    const mode = stats.mode ?? 0
+    const isDir = (mode & 0o170000) === 0o040000
+    const isLink = (mode & 0o170000) === 0o120000
+    const type: FileInfo['type'] = isDir ? 'directory' : isLink ? 'symlink' : 'file'
+
+    const info: FileInfo = {
+      name: basename(path) || path,
+      path,
+      type,
+      size: stats.size ?? 0,
+      permissions: mode.toString(8),
+      owner: stats.uid ?? 0,
+      group: stats.gid ?? 0,
+      modifiedAt: stats.mtime ? new Date(stats.mtime * 1000).toISOString() : '',
+      accessedAt: stats.atime ? new Date(stats.atime * 1000).toISOString() : ''
+    }
+
+    if (type === 'directory') {
+      const entries = await this.listDir(sessionId, path)
+      info.itemCount = entries.length
+    }
+
+    if (type === 'symlink') {
+      info.symlinkTarget = await new Promise<string | undefined>((resolve) => {
+        sftp.readlink(path, (err, target) => {
+          resolve(err ? undefined : target)
+        })
+      })
+    }
+
+    log(`getFileInfo(${sessionId.slice(0, 8)}, ${path}) → type=${type}`)
+    return info
   }
 
   async readFile(sessionId: string, remotePath: string): Promise<Buffer> {
@@ -261,27 +321,66 @@ export class Ssh2SftpService implements ISftpService {
     })
   }
 
-  async downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<void> {
+  async downloadFile(
+    sessionId: string,
+    remotePath: string,
+    localPath: string,
+    options: DownloadOptions
+  ): Promise<void> {
+    const { signal, onProgress } = options
     log(`downloadFile(${sessionId.slice(0, 8)}, ${remotePath} → ${localPath})`)
     const sftp = await this.getSftp(sessionId)
+    const stats = await this.statSafe(sessionId, remotePath)
+    const total = stats?.size
+
     try {
       await new Promise<void>((resolve, reject) => {
         let settled = false
+        let aborted = false
+        let transferred = 0
         const settle = (fn: () => void) => {
           if (!settled) { settled = true; fn() }
         }
         const readStream = sftp.createReadStream(remotePath)
         const writeStream = createWriteStream(localPath)
+
+        const onAbort = () => {
+          log(`downloadFile aborted`)
+          aborted = true
+          readStream.destroy()
+          writeStream.destroy()
+        }
+        if (signal) {
+          if (signal.aborted) onAbort()
+          else signal.addEventListener('abort', onAbort)
+        }
+        const detachAbort = () => {
+          if (signal) signal.removeEventListener('abort', onAbort)
+        }
+
+        readStream.on('data', (chunk: Buffer) => {
+          transferred += chunk.length
+          onProgress?.(transferred, total)
+        })
         readStream.on('error', (err: Error) => {
+          detachAbort()
           log(`downloadFile read error: ${err.message}`)
-          settle(() => reject(err))
+          settle(() => reject(aborted ? cancelledError() : err))
         })
         writeStream.on('error', (err: Error) => {
+          detachAbort()
           log(`downloadFile write error: ${err.message}`)
-          settle(() => reject(err))
+          settle(() => reject(aborted ? cancelledError() : err))
         })
         writeStream.on('close', () => {
+          detachAbort()
+          if (aborted) {
+            log(`downloadFile close — aborted`)
+            settle(() => reject(cancelledError()))
+            return
+          }
           log(`downloadFile close — done`)
+          onProgress?.(transferred, total)
           settle(() => resolve())
         })
         readStream.pipe(writeStream)
@@ -292,44 +391,87 @@ export class Ssh2SftpService implements ISftpService {
     }
   }
 
-  async downloadFolderAsZip(sessionId: string, remotePath: string, localZipPath: string): Promise<void> {
+  async downloadFolderAsZip(
+    sessionId: string,
+    remotePath: string,
+    localZipPath: string,
+    options: DownloadOptions
+  ): Promise<void> {
+    const { signal, onProgress } = options
     log(`downloadFolderAsZip(${sessionId.slice(0, 8)}, ${remotePath} → ${localZipPath})`)
     try {
       const rootName = basename(remotePath) || remotePath
       const files = await this.collectFilesRecursive(sessionId, remotePath)
       const sftp = await this.getSftp(sessionId)
+      const total = files.reduce((sum, f) => sum + f.size, 0)
 
       await new Promise<void>((resolve, reject) => {
         let settled = false
+        let aborted = false
+        let transferred = 0
         const settle = (fn: () => void) => {
           if (!settled) { settled = true; fn() }
         }
 
         const output = createWriteStream(localZipPath)
         const archive = archiver('zip')
+        const activeReadStreams: Array<{ destroy: () => void }> = []
+
+        const onAbort = () => {
+          log(`downloadFolderAsZip aborted`)
+          aborted = true
+          archive.abort()
+          for (const s of activeReadStreams) {
+            try { s.destroy() } catch { /* already closed */ }
+          }
+          output.destroy()
+        }
+        if (signal) {
+          if (signal.aborted) onAbort()
+          else signal.addEventListener('abort', onAbort)
+        }
+        const detachAbort = () => {
+          if (signal) signal.removeEventListener('abort', onAbort)
+        }
 
         output.on('close', () => {
+          detachAbort()
+          if (aborted) {
+            log(`downloadFolderAsZip close — aborted`)
+            settle(() => reject(cancelledError()))
+            return
+          }
           log(`downloadFolderAsZip close — ${archive.pointer()} bytes written`)
+          onProgress?.(transferred, total)
           settle(() => resolve())
         })
         output.on('error', (err: Error) => {
+          detachAbort()
           log(`downloadFolderAsZip output error: ${err.message}`)
-          settle(() => reject(err))
+          settle(() => reject(aborted ? cancelledError() : err))
         })
         archive.on('error', (err: Error) => {
+          detachAbort()
           log(`downloadFolderAsZip archive error: ${err.message}`)
-          settle(() => reject(err))
+          settle(() => reject(aborted ? cancelledError() : err))
         })
 
         archive.pipe(output)
 
         for (const file of files) {
-          archive.append(sftp.createReadStream(file.path), { name: `${rootName}/${file.relativePath}` })
+          const readStream = sftp.createReadStream(file.path)
+          activeReadStreams.push(readStream)
+          readStream.on('data', (chunk: Buffer) => {
+            transferred += chunk.length
+            onProgress?.(transferred, total)
+          })
+          archive.append(readStream, { name: `${rootName}/${file.relativePath}` })
         }
 
         archive.finalize().catch((err: Error) => {
+          detachAbort()
           log(`downloadFolderAsZip finalize error: ${err.message}`)
-          settle(() => reject(err))
+          settle(() => reject(aborted ? cancelledError() : err))
         })
       })
     } catch (err) {
@@ -341,14 +483,14 @@ export class Ssh2SftpService implements ISftpService {
   private async collectFilesRecursive(
     sessionId: string,
     rootPath: string
-  ): Promise<Array<{ path: string; relativePath: string }>> {
-    const results: Array<{ path: string; relativePath: string }> = []
+  ): Promise<Array<{ path: string; relativePath: string; size: number }>> {
+    const results: Array<{ path: string; relativePath: string; size: number }> = []
     const entries = await this.listDir(sessionId, rootPath)
     for (const entry of entries) {
       if (entry.type === 'directory') {
         results.push(...(await this.collectFilesRecursive(sessionId, entry.path)))
       } else if (entry.type === 'file') {
-        results.push({ path: entry.path, relativePath: remoteRelative(rootPath, entry.path) })
+        results.push({ path: entry.path, relativePath: remoteRelative(rootPath, entry.path), size: entry.size })
       }
       // symlinks are intentionally skipped — not followed, to avoid cycles
     }
@@ -441,6 +583,102 @@ export class Ssh2SftpService implements ISftpService {
     }
 
     log(`copy(${sessionId.slice(0, 8)}) → done`)
+  }
+
+  private isBinaryBuffer(buffer: Buffer): boolean {
+    const len = Math.min(buffer.length, 8192)
+    for (let i = 0; i < len; i++) {
+      if (buffer[i] === 0) return true
+    }
+    return false
+  }
+
+  private matchesInFile(content: string, lowerQuery: string): { totalMatches: number; matches: SearchLineMatch[] } {
+    const matches: SearchLineMatch[] = []
+    let totalMatches = 0
+
+    for (const [i, lineText] of content.split(/\r\n|\r|\n/).entries()) {
+      const lowerLine = lineText.toLowerCase()
+      let fromIndex = 0
+      let lineHasMatch = false
+      while (true) {
+        const at = lowerLine.indexOf(lowerQuery, fromIndex)
+        if (at === -1) break
+        totalMatches++
+        lineHasMatch = true
+        fromIndex = at + lowerQuery.length
+      }
+      if (lineHasMatch && matches.length < MAX_REPORTED_MATCHES_PER_FILE) {
+        const text = lineText.length > MAX_MATCH_TEXT_LENGTH
+          ? `${lineText.slice(0, MAX_MATCH_TEXT_LENGTH)}...`
+          : lineText
+        matches.push({ line: i + 1, text })
+      }
+    }
+
+    return { totalMatches, matches }
+  }
+
+  private async searchFile(
+    sessionId: string,
+    entry: FileNode,
+    lowerQuery: string,
+    onMatch?: (result: SearchFileMatch) => void
+  ): Promise<void> {
+    if (entry.size > MAX_SEARCH_FILE_SIZE) return
+
+    let buffer: Buffer
+    try {
+      buffer = await this.readFile(sessionId, entry.path)
+    } catch (err: unknown) {
+      log(`searchInFolder readFile failed for ${entry.path}: ${(err as Error).message}`)
+      return
+    }
+
+    if (this.isBinaryBuffer(buffer)) return
+
+    const { totalMatches, matches } = this.matchesInFile(buffer.toString('utf8'), lowerQuery)
+    if (totalMatches > 0) {
+      onMatch?.({ path: entry.path, name: entry.name, totalMatches, matches })
+    }
+  }
+
+  async searchInFolder(
+    sessionId: string,
+    rootPath: string,
+    query: string,
+    options: SearchOptions
+  ): Promise<void> {
+    const { signal, onMatch } = options
+    log(`searchInFolder(${sessionId.slice(0, 8)}, ${rootPath}, query="${query}")`)
+    const lowerQuery = query.toLowerCase()
+
+    const checkAborted = () => {
+      if (signal?.aborted) throw cancelledSearchError()
+    }
+
+    const walk = async (dirPath: string): Promise<void> => {
+      checkAborted()
+      let entries: FileNode[]
+      try {
+        entries = await this.listDir(sessionId, dirPath)
+      } catch (err: unknown) {
+        log(`searchInFolder listDir failed for ${dirPath}: ${(err as Error).message}`)
+        return
+      }
+
+      for (const entry of entries) {
+        checkAborted()
+        if (entry.type === 'directory') {
+          await walk(entry.path)
+        } else if (entry.type === 'file') {
+          await this.searchFile(sessionId, entry, lowerQuery, onMatch)
+        }
+        // symlinks are intentionally skipped — not followed, to avoid cycles
+      }
+    }
+
+    await walk(rootPath)
   }
 }
 

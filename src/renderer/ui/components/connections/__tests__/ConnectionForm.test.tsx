@@ -31,6 +31,7 @@ function baseUseApp() {
     disconnect: vi.fn(),
     notify: mockNotify,
     dismissNotification: vi.fn(),
+    updateNotification: vi.fn(),
     openTerminalAt: vi.fn(),
     terminalTargetDir: null,
     clipboard: null,

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IRemoteApi, UploadProgressEvent } from '../renderer/domain/ports/IRemoteApi'
+import type { IRemoteApi, UploadProgressEvent, DownloadProgressEvent, SearchProgressEvent } from '../renderer/domain/ports/IRemoteApi'
 
 const api: IRemoteApi = {
   connections: {
@@ -18,6 +18,13 @@ const api: IRemoteApi = {
   },
   sftp: {
     listDir: (sessionId, path) => ipcRenderer.invoke('sftp:listDir', sessionId, path),
+    getFileInfo: async (sessionId, path) => {
+      const result = await ipcRenderer.invoke('sftp:getFileInfo', sessionId, path)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      return result.data
+    },
     readFile: (sessionId, remotePath) => ipcRenderer.invoke('sftp:readFile', sessionId, remotePath),
     writeFile: (sessionId, remotePath, content) =>
       ipcRenderer.invoke('sftp:writeFile', sessionId, remotePath, content),
@@ -44,22 +51,34 @@ const api: IRemoteApi = {
       ipcRenderer.invoke('sftp:openSaveDialog', { mode, suggestedName }),
     downloadFile: async (sessionId, remotePath, localPath) => {
       const result = await ipcRenderer.invoke('sftp:downloadFile', sessionId, remotePath, localPath)
-      if (!result.success) {
-        throw new Error(result.error)
-      }
+      return { transferId: result.transferId }
     },
     downloadFolder: async (sessionId, remotePath, localPath) => {
       const result = await ipcRenderer.invoke('sftp:downloadFolder', sessionId, remotePath, localPath)
-      if (!result.success) {
-        throw new Error(result.error)
-      }
+      return { transferId: result.transferId }
     },
+    onDownloadProgress: (callback) => {
+      const listener = (_e: Electron.IpcRendererEvent, event: DownloadProgressEvent) => callback(event)
+      ipcRenderer.on('sftp:downloadProgress', listener)
+      return () => ipcRenderer.removeListener('sftp:downloadProgress', listener)
+    },
+    cancelDownload: (transferId) => ipcRenderer.invoke('sftp:cancelDownload', transferId),
     copy: async (sessionId, sourcePath, destPath, type, overwrite) => {
       const result = await ipcRenderer.invoke('sftp:copy', sessionId, sourcePath, destPath, type, overwrite)
       if (!result.success) {
         throw Object.assign(new Error(result.error), { code: result.code })
       }
-    }
+    },
+    searchInFolder: async (sessionId, rootPath, query) => {
+      const result = await ipcRenderer.invoke('sftp:searchInFolder', sessionId, rootPath, query)
+      return { searchId: result.searchId }
+    },
+    onSearchProgress: (callback) => {
+      const listener = (_e: Electron.IpcRendererEvent, event: SearchProgressEvent) => callback(event)
+      ipcRenderer.on('sftp:searchProgress', listener)
+      return () => ipcRenderer.removeListener('sftp:searchProgress', listener)
+    },
+    cancelSearch: (searchId) => ipcRenderer.invoke('sftp:cancelSearch', searchId)
   },
   terminal: {
     create: (sessionId, cols, rows, initialDir) =>

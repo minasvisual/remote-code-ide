@@ -48,7 +48,7 @@ const baseAppValue = {
   terminalTargetDir: null, clipboard: null,
   loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
   deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
-  disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(),
+  disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(), updateNotification: vi.fn(),
   openTerminalAt: vi.fn(),
   registerBeforeDisconnect: vi.fn(),
   copyToClipboard: vi.fn(), clearClipboard: vi.fn(),

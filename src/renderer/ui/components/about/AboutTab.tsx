@@ -4,6 +4,15 @@ declare const __APP_VERSION__: string
 
 const CHANGELOG = [
   {
+    version: 'Unreleased',
+    date: '2026-07-16',
+    notes: [
+      'Added Copy/Paste to the file explorer: duplicate a file or folder entirely server-side (recursive for folders), with an overwrite-confirmation dialog and a guard against pasting a folder into itself.',
+      'Downloads (file and folder) now report byte-level progress and can be cancelled mid-transfer, with partial files cleaned up automatically.',
+      'Closing the app while a download is in progress now asks for confirmation ("Cancel downloads and close" / "Keep downloading") instead of interrupting the transfer silently.'
+    ]
+  },
+  {
     version: '0.1.6',
     date: '2026-07-13',
     notes: [
@@ -44,7 +53,8 @@ const CHANGELOG = [
     date: '2026-07-13',
     notes: [
       'Added SSH key setup tutorial modal to the connection form.',
-      'Terminal now auto-starts with the session and supports a right-click context menu (copy/paste).',
+      'Terminal now auto-starts with the session, opens in the connection\'s Initial Directory automatically, and supports a right-click context menu (copy/paste).',
+      'Added an "Open Terminal Here" action to folder context menus in the file explorer.',
       'Added drag-to-resize panels and an unsaved changes confirmation dialog.',
       'Added file and folder download from the remote file explorer (including download-folder-as-zip).'
     ]
@@ -53,7 +63,11 @@ const CHANGELOG = [
     version: '0.1.0',
     date: '2026-06-11',
     notes: [
-      'Initial release with SSH/SFTP support, Monaco editor, integrated terminal, and connection manager (context menu, edit flow, keyboard shortcuts, file uploads).'
+      'Initial release with SSH/SFTP support, Monaco editor, integrated terminal, and connection manager (context menu, edit flow, keyboard shortcuts).',
+      'Added file explorer support for new file creation and rename/delete via context menu.',
+      'Added file uploads to the remote file explorer.',
+      'Added an optional "Initial Directory" field to connections, so the explorer starts there instead of at "/".',
+      'Added the About panel (app info, runtime versions, changelog, and a Docs tab with keyboard shortcuts and FAQ).'
     ]
   }
 ]
@@ -112,7 +126,8 @@ export function AboutTab() {
           {CHANGELOG.map((entry) => (
             <div key={entry.version}>
               <p className="font-semibold text-ide-text">
-                v{entry.version} <span className="text-ide-text-muted font-normal">— {entry.date}</span>
+                {entry.version === 'Unreleased' ? 'Unreleased' : `v${entry.version}`}{' '}
+                <span className="text-ide-text-muted font-normal">— {entry.date}</span>
               </p>
               <ul className="mt-1 space-y-0.5">
                 {entry.notes.map((note, i) => (

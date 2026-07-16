@@ -3,6 +3,8 @@ import { Spinner } from '../commons/Spinner'
 import { ContextMenu } from '../commons/ContextMenu'
 import { Modal } from '../commons/Modal'
 import { NewFileDialog } from '../commons/NewFileDialog'
+import { FilePropertiesModal } from './FilePropertiesModal'
+import { FindInFolderModal } from './FindInFolderModal'
 import { Button } from '../commons/Button'
 import { getRemoteApi } from '../../../adapters/api/WindowRemoteApi'
 import { useEditor } from '../../../application/contexts/EditorContext'
@@ -37,7 +39,7 @@ function getFileIcon(filename: string): string {
 export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpload, onOpenTerminal, refreshSignal, refreshTarget }: Props) {
   const api = getRemoteApi()
   const { openFile } = useEditor()
-  const { notify, clipboard, copyToClipboard } = useApp()
+  const { notify, updateNotification, clipboard, copyToClipboard } = useApp()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [children, setChildren] = useState<FileNode[]>(node.children ?? [])
@@ -47,6 +49,7 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FileNode | null>(null)
+  const [propertiesTarget, setPropertiesTarget] = useState<FileNode | null>(null)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const renameRef = useRef<HTMLInputElement>(null)
@@ -56,6 +59,8 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
 
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderError, setNewFolderError] = useState<string | undefined>()
+
+  const [findTarget, setFindTarget] = useState<FileNode | null>(null)
 
   const loadedRef = useRef(loaded)
   useEffect(() => { loadedRef.current = loaded }, [loaded])
@@ -144,6 +149,10 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
 
   const handleDeleteClick = () => {
     setDeleteTarget(node)
+  }
+
+  const handlePropertiesClick = () => {
+    setPropertiesTarget(node)
   }
 
   const handleCopyClick = () => {
@@ -264,15 +273,57 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
     const suggestedName = isFolder ? `${node.name}.zip` : node.name
     const localPath = await api.sftp.openSaveDialog(isFolder ? 'folder' : 'file', suggestedName)
     if (!localPath) return
+
+    const notifId = notify('info', `Downloading ${node.name}...`)
+
     try {
-      if (isFolder) {
-        await api.sftp.downloadFolder(sessionId, node.path, localPath)
-      } else {
-        await api.sftp.downloadFile(sessionId, node.path, localPath)
-      }
-      notify('success', `Downloaded ${node.name}`)
+      const { transferId } = isFolder
+        ? await api.sftp.downloadFolder(sessionId, node.path, localPath)
+        : await api.sftp.downloadFile(sessionId, node.path, localPath)
+
+      updateNotification(notifId, {
+        progress: 0,
+        status: 'downloading',
+        onCancel: () => { api.sftp.cancelDownload(transferId) }
+      })
+
+      const unsubscribe = api.sftp.onDownloadProgress((event) => {
+        if (event.transferId !== transferId) return
+
+        if (event.status === 'downloading') {
+          const pct = event.total !== undefined
+            ? Math.min(100, Math.round((event.transferred / event.total) * 100))
+            : undefined
+          updateNotification(notifId, {
+            progress: pct,
+            message: pct !== undefined ? `Downloading ${node.name}... ${pct}%` : `Downloading ${node.name}...`
+          })
+          return
+        }
+
+        if (event.status === 'done') {
+          updateNotification(notifId, {
+            type: 'success', status: 'done', progress: undefined, onCancel: undefined,
+            message: `Downloaded ${node.name}`
+          })
+        } else if (event.status === 'cancelled') {
+          updateNotification(notifId, {
+            type: 'info', status: 'cancelled', progress: undefined, onCancel: undefined,
+            message: `Download cancelled: ${node.name}`
+          })
+        } else {
+          updateNotification(notifId, {
+            type: 'error', status: 'error', progress: undefined, onCancel: undefined,
+            message: `Failed to download ${node.name}: ${event.error ?? 'Unknown error'}`
+          })
+        }
+        unsubscribe()
+      })
     } catch (err: unknown) {
-      notify('error', `Failed to download ${node.name}: ${(err as Error).message}`)
+      updateNotification(notifId, {
+        type: 'error', status: 'error', progress: undefined, onCancel: undefined,
+        message: `Failed to download ${node.name}: ${(err as Error).message}`
+      })
     }
   }
 
@@ -306,7 +357,11 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
       { label: 'New File', onClick: () => { setNewFileError(undefined); setNewFileOpen(true) } },
       { label: 'New Folder', onClick: () => { setNewFolderError(undefined); setNewFolderOpen(true) } },
       { label: 'Refresh', onClick: doRefresh },
+      { type: 'divider' as const },
+      { label: 'Find in Folder...', onClick: () => setFindTarget(node) },
     ] : []),
+    { type: 'divider' as const },
+    { label: 'Properties', onClick: handlePropertiesClick },
   ]
 
   return (
@@ -406,6 +461,22 @@ export function TreeNode({ node, sessionId, depth = 0, onDelete, onRename, onUpl
           error={newFolderError}
           onConfirm={handleNewFolderConfirm}
           onCancel={handleNewFolderCancel}
+        />
+      )}
+
+      {propertiesTarget && (
+        <FilePropertiesModal
+          node={propertiesTarget}
+          sessionId={sessionId}
+          onClose={() => setPropertiesTarget(null)}
+        />
+      )}
+
+      {findTarget && (
+        <FindInFolderModal
+          sessionId={sessionId}
+          rootPath={findTarget.path}
+          onClose={() => setFindTarget(null)}
         />
       )}
 

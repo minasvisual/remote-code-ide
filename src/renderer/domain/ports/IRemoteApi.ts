@@ -24,6 +24,55 @@ export interface UploadProgressEvent {
   error?: string
 }
 
+export interface DownloadProgressEvent {
+  transferId: string
+  transferred: number
+  total?: number
+  status: 'downloading' | 'done' | 'error' | 'cancelled'
+  error?: string
+}
+
+export interface DownloadResult {
+  transferId: string
+}
+
+export interface SearchLineMatch {
+  line: number
+  text: string
+}
+
+export interface SearchFileMatch {
+  path: string
+  name: string
+  totalMatches: number
+  matches: SearchLineMatch[]
+}
+
+export interface SearchProgressEvent {
+  searchId: string
+  type: 'match' | 'done' | 'error' | 'cancelled'
+  result?: SearchFileMatch
+  error?: string
+}
+
+export interface SearchResult {
+  searchId: string
+}
+
+export interface FileInfo {
+  name: string
+  path: string
+  type: 'file' | 'directory' | 'symlink'
+  size: number
+  itemCount?: number
+  permissions: string
+  owner: number
+  group: number
+  modifiedAt: string
+  accessedAt: string
+  symlinkTarget?: string
+}
+
 export interface IRemoteApi {
   connections: {
     list(): Promise<Connection[]>
@@ -39,6 +88,7 @@ export interface IRemoteApi {
   }
   sftp: {
     listDir(sessionId: string, path: string): Promise<FileNode[]>
+    getFileInfo(sessionId: string, path: string): Promise<FileInfo>
     readFile(sessionId: string, remotePath: string): Promise<ReadFileResult>
     writeFile(sessionId: string, remotePath: string, content: string): Promise<void>
     rename(sessionId: string, oldPath: string, newPath: string): Promise<void>
@@ -50,8 +100,10 @@ export interface IRemoteApi {
     uploadFiles(sessionId: string, targetDir: string, localPaths: string[]): Promise<void>
     onUploadProgress(callback: (event: UploadProgressEvent) => void): () => void
     openSaveDialog(mode: 'file' | 'folder', suggestedName: string): Promise<string | null>
-    downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<void>
-    downloadFolder(sessionId: string, remotePath: string, localPath: string): Promise<void>
+    downloadFile(sessionId: string, remotePath: string, localPath: string): Promise<DownloadResult>
+    downloadFolder(sessionId: string, remotePath: string, localPath: string): Promise<DownloadResult>
+    onDownloadProgress(callback: (event: DownloadProgressEvent) => void): () => void
+    cancelDownload(transferId: string): Promise<void>
     copy(
       sessionId: string,
       sourcePath: string,
@@ -59,6 +111,9 @@ export interface IRemoteApi {
       type: 'file' | 'directory',
       overwrite?: boolean
     ): Promise<void>
+    searchInFolder(sessionId: string, rootPath: string, query: string): Promise<SearchResult>
+    onSearchProgress(callback: (event: SearchProgressEvent) => void): () => void
+    cancelSearch(searchId: string): Promise<void>
   }
   terminal: {
     create(sessionId: string, cols: number, rows: number, initialDir?: string): Promise<string>

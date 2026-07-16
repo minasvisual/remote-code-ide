@@ -1,8 +1,12 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { writeFileSync, appendFileSync, promises as fsp } from 'fs'
 import chardet from 'chardet'
-import type { ISftpService } from '../../domain/ports/ISftpService'
+import { v4 as uuidv4 } from 'uuid'
+import type { ISftpService, SearchFileMatch } from '../../domain/ports/ISftpService'
 import type { TempFileManager } from '../../adapters/temp/TempFileManager'
+import type { DownloadTransferRegistry } from '../../adapters/temp/DownloadTransferRegistry'
+import type { SearchTransferRegistry } from '../../adapters/temp/SearchTransferRegistry'
+import { createProgressThrottle } from './downloadProgressThrottle'
 import { basename, join, dirname, relative } from 'path'
 import { tmpdir } from 'os'
 
@@ -41,10 +45,32 @@ function log(msg: string): void {
   try { appendFileSync(LOG_FILE, line) } catch {}
 }
 
-export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager): void {
+interface SearchProgressPayload {
+  searchId: string
+  type: 'match' | 'done' | 'error' | 'cancelled'
+  result?: SearchFileMatch
+  error?: string
+}
+
+export function registerSftpIpc(
+  sftp: ISftpService,
+  tempFiles: TempFileManager,
+  downloads: DownloadTransferRegistry,
+  searches: SearchTransferRegistry
+): void {
   ipcMain.handle('sftp:listDir', (_e, sessionId: string, path: string) =>
     sftp.listDir(sessionId, path)
   )
+
+  ipcMain.handle('sftp:getFileInfo', async (_e, sessionId: string, path: string) => {
+    try {
+      const info = await sftp.getFileInfo(sessionId, path)
+      return { success: true, data: info }
+    } catch (err: unknown) {
+      const e = err as { message: string }
+      return { success: false, error: e.message }
+    }
+  })
 
   ipcMain.handle('sftp:readFile', async (_e, sessionId: string, remotePath: string) => {
     log(`sftp:readFile received — session=${sessionId.slice(0, 8)} path=${remotePath}`)
@@ -155,29 +181,85 @@ export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager):
     }
   )
 
+  // Returns { transferId } immediately (before the transfer settles) so the renderer can
+  // correlate sftp:downloadProgress events and issue sftp:cancelDownload while it's still in flight.
+  // Completion/failure/cancellation is reported asynchronously via a final sftp:downloadProgress
+  // event carrying a terminal `status`, mirroring the pending/uploading/done/error shape used by uploads.
   ipcMain.handle(
     'sftp:downloadFile',
-    async (_e, sessionId: string, remotePath: string, localPath: string) => {
-      try {
-        await sftp.downloadFile(sessionId, remotePath, localPath)
-        return { success: true }
-      } catch (err: unknown) {
-        return { success: false, error: (err as Error).message }
-      }
+    (_e, sessionId: string, remotePath: string, localPath: string) => {
+      const transferId = uuidv4()
+      const controller = new AbortController()
+      const progress = createProgressThrottle(
+        (payload) => { try { _e.sender.send('sftp:downloadProgress', payload) } catch {} },
+        transferId
+      )
+
+      const donePromise = sftp.downloadFile(sessionId, remotePath, localPath, {
+        transferId,
+        signal: controller.signal,
+        onProgress: progress.onProgress
+      })
+
+      downloads.register(transferId, {
+        localPath,
+        abort: async () => {
+          controller.abort()
+          await donePromise.catch(() => {})
+        }
+      })
+
+      donePromise
+        .then(() => progress.flushFinal('done'))
+        .catch((err: unknown) => {
+          const e = err as { code?: string; message: string }
+          progress.flushFinal(e.code === 'CANCELLED' ? 'cancelled' : 'error', e.message)
+        })
+        .finally(() => downloads.unregister(transferId))
+
+      return { transferId }
     }
   )
 
   ipcMain.handle(
     'sftp:downloadFolder',
-    async (_e, sessionId: string, remotePath: string, localPath: string) => {
-      try {
-        await sftp.downloadFolderAsZip(sessionId, remotePath, localPath)
-        return { success: true }
-      } catch (err: unknown) {
-        return { success: false, error: (err as Error).message }
-      }
+    (_e, sessionId: string, remotePath: string, localPath: string) => {
+      const transferId = uuidv4()
+      const controller = new AbortController()
+      const progress = createProgressThrottle(
+        (payload) => { try { _e.sender.send('sftp:downloadProgress', payload) } catch {} },
+        transferId
+      )
+
+      const donePromise = sftp.downloadFolderAsZip(sessionId, remotePath, localPath, {
+        transferId,
+        signal: controller.signal,
+        onProgress: progress.onProgress
+      })
+
+      downloads.register(transferId, {
+        localPath,
+        abort: async () => {
+          controller.abort()
+          await donePromise.catch(() => {})
+        }
+      })
+
+      donePromise
+        .then(() => progress.flushFinal('done'))
+        .catch((err: unknown) => {
+          const e = err as { code?: string; message: string }
+          progress.flushFinal(e.code === 'CANCELLED' ? 'cancelled' : 'error', e.message)
+        })
+        .finally(() => downloads.unregister(transferId))
+
+      return { transferId }
     }
   )
+
+  ipcMain.handle('sftp:cancelDownload', async (_e, transferId: string) => {
+    await downloads.cancel(transferId)
+  })
 
   ipcMain.handle(
     'sftp:uploadFiles',
@@ -214,4 +296,45 @@ export function registerSftpIpc(sftp: ISftpService, tempFiles: TempFileManager):
       }
     }
   )
+
+  // Returns { searchId } immediately (before the search settles) so the renderer can correlate
+  // sftp:searchProgress events and issue sftp:cancelSearch while it's still in flight.
+  // Each file with a match is reported via a `match` event; completion/failure/cancellation is
+  // reported asynchronously via a final sftp:searchProgress event carrying a terminal `type`.
+  ipcMain.handle(
+    'sftp:searchInFolder',
+    (_e, sessionId: string, rootPath: string, query: string) => {
+      const searchId = uuidv4()
+      const controller = new AbortController()
+      const sendProgress = (payload: SearchProgressPayload) => {
+        try { _e.sender.send('sftp:searchProgress', payload) } catch {}
+      }
+
+      const donePromise = sftp.searchInFolder(sessionId, rootPath, query, {
+        signal: controller.signal,
+        onMatch: (result) => sendProgress({ searchId, type: 'match', result })
+      })
+
+      searches.register(searchId, {
+        abort: async () => {
+          controller.abort()
+          await donePromise.catch(() => {})
+        }
+      })
+
+      donePromise
+        .then(() => sendProgress({ searchId, type: 'done' }))
+        .catch((err: unknown) => {
+          const e = err as { code?: string; message: string }
+          sendProgress({ searchId, type: e.code === 'CANCELLED' ? 'cancelled' : 'error', error: e.message })
+        })
+        .finally(() => searches.unregister(searchId))
+
+      return { searchId }
+    }
+  )
+
+  ipcMain.handle('sftp:cancelSearch', async (_e, searchId: string) => {
+    await searches.cancel(searchId)
+  })
 }

@@ -3,10 +3,14 @@ import { getRemoteApi } from '../../adapters/api/WindowRemoteApi'
 import type { Connection, NewConnection } from '../../domain/entities/Connection'
 import type { ActiveSession } from '../../domain/entities/EditorTab'
 
-interface Notification {
+export interface Notification {
   id: string
   type: 'success' | 'error' | 'info'
   message: string
+  /** 0-100. Undefined while `status: 'downloading'` renders an indeterminate spinner instead of a bar. */
+  progress?: number
+  status?: 'downloading' | 'done' | 'error' | 'cancelled'
+  onCancel?: () => void
 }
 
 interface TerminalTarget {
@@ -35,8 +39,9 @@ interface AppContextValue {
   testConnection(conn: NewConnection): Promise<{ success: boolean; message: string }>
   connect(connectionId: string): Promise<void>
   disconnect(): Promise<void>
-  notify(type: Notification['type'], message: string): void
+  notify(type: Notification['type'], message: string): string
   dismissNotification(id: string): void
+  updateNotification(id: string, patch: Partial<Omit<Notification, 'id'>>): void
   openTerminalAt(path: string): void
   registerBeforeDisconnect(cb: (sessionId: string) => Promise<boolean>): void
   copyToClipboard(entry: ClipboardEntry): void
@@ -54,16 +59,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [terminalTargetDir, setTerminalTargetDir] = useState<TerminalTarget | null>(null)
   const [clipboard, setClipboard] = useState<ClipboardEntry | null>(null)
   const beforeDisconnectRef = useRef<((sessionId: string) => Promise<boolean>) | null>(null)
+  const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  const dismissNotification = useCallback((id: string) => {
+    const timer = dismissTimers.current.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      dismissTimers.current.delete(id)
+    }
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }, [])
+
+  const scheduleAutoDismiss = useCallback((id: string) => {
+    const existing = dismissTimers.current.get(id)
+    if (existing) clearTimeout(existing)
+    const timer = setTimeout(() => {
+      dismissTimers.current.delete(id)
+      setNotifications((prev) => prev.filter((n) => n.id !== id))
+    }, 4000)
+    dismissTimers.current.set(id, timer)
+  }, [])
 
   const notify = useCallback((type: Notification['type'], message: string) => {
     const id = Date.now().toString()
     setNotifications((prev) => [...prev, { id, type, message }])
-    setTimeout(() => setNotifications((prev) => prev.filter((n) => n.id !== id)), 4000)
-  }, [])
+    scheduleAutoDismiss(id)
+    return id
+  }, [scheduleAutoDismiss])
 
-  const dismissNotification = useCallback((id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
-  }, [])
+  const updateNotification = useCallback(
+    (id: string, patch: Partial<Omit<Notification, 'id'>>) => {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch } : n)))
+      if (patch.status === 'downloading') {
+        const existing = dismissTimers.current.get(id)
+        if (existing) {
+          clearTimeout(existing)
+          dismissTimers.current.delete(id)
+        }
+      } else {
+        scheduleAutoDismiss(id)
+      }
+    },
+    [scheduleAutoDismiss]
+  )
 
   const loadConnections = useCallback(async () => {
     const list = await api.connections.list()
@@ -180,6 +218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         disconnect,
         notify,
         dismissNotification,
+        updateNotification,
         openTerminalAt,
         registerBeforeDisconnect,
         copyToClipboard,

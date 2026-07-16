@@ -1,10 +1,12 @@
-import { app, BrowserWindow, session, globalShortcut } from 'electron'
+import { app, BrowserWindow, session, globalShortcut, dialog } from 'electron'
 import { join } from 'path'
 import { SafeStorageCrypto } from './adapters/crypto/SafeStorageCrypto'
 import { ElectronStoreConnectionRepo } from './adapters/storage/ElectronStoreConnectionRepo'
 import { Ssh2Client } from './adapters/ssh/Ssh2Client'
 import { Ssh2SftpService } from './adapters/sftp/Ssh2SftpService'
 import { TempFileManager } from './adapters/temp/TempFileManager'
+import { DownloadTransferRegistry } from './adapters/temp/DownloadTransferRegistry'
+import { SearchTransferRegistry } from './adapters/temp/SearchTransferRegistry'
 import { registerConnectionsIpc } from './infrastructure/ipc/connections.ipc'
 import { registerSshIpc } from './infrastructure/ipc/ssh.ipc'
 import { registerSftpIpc } from './infrastructure/ipc/sftp.ipc'
@@ -15,6 +17,8 @@ const repo = new ElectronStoreConnectionRepo(crypto)
 const sshClient = new Ssh2Client()
 const sftpService = new Ssh2SftpService(sshClient)
 const tempFiles = new TempFileManager()
+const downloadRegistry = new DownloadTransferRegistry()
+const searchRegistry = new SearchTransferRegistry()
 
 function resolveIcon(): string {
   const base = app.isPackaged ? app.getAppPath() : join(__dirname, '../..')
@@ -40,6 +44,25 @@ function createWindow(): void {
   })
 
   win.setMenuBarVisibility(false)
+
+  win.on('close', (event) => {
+    if (!downloadRegistry.hasActive()) return
+    event.preventDefault()
+    dialog
+      .showMessageBox(win, {
+        type: 'warning',
+        buttons: ['Cancel downloads and close', 'Keep downloading'],
+        defaultId: 1,
+        cancelId: 1,
+        message: 'Downloads in progress',
+        detail: 'One or more downloads are still in progress. Cancel them and close, or keep downloading?'
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          downloadRegistry.cancelAll().finally(() => win.destroy())
+        }
+      })
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -80,7 +103,7 @@ app.whenReady().then(() => {
 
   registerConnectionsIpc(repo, sshClient, crypto)
   registerSshIpc(sshClient, repo, crypto, tempFiles)
-  registerSftpIpc(sftpService, tempFiles)
+  registerSftpIpc(sftpService, tempFiles, downloadRegistry, searchRegistry)
   registerTerminalIpc(sshClient)
 
   createWindow()

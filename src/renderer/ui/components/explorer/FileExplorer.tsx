@@ -6,6 +6,7 @@ import { Modal } from '../commons/Modal'
 import { Button } from '../commons/Button'
 import { NewFileDialog } from '../commons/NewFileDialog'
 import { UploadDialog } from '../commons/UploadDialog'
+import { FindInFolderModal } from './FindInFolderModal'
 import type { UploadEntry } from '../commons/UploadDialog'
 import { getRemoteApi } from '../../../adapters/api/WindowRemoteApi'
 import { useApp } from '../../../application/contexts/AppContext'
@@ -25,6 +26,7 @@ export function FileExplorer() {
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [refreshTarget, setRefreshTarget] = useState<{ path: string; tick: number } | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [findTarget, setFindTarget] = useState<string | null>(null)
   const uploadUnsubscribeRef = useRef<(() => void) | null>(null)
   const uploadTargetDirRef = useRef<string>('/')
 
@@ -242,10 +244,13 @@ export function FileExplorer() {
         )}
       </div>
 
-      {contextMenu && clipboard && (
+      {contextMenu && (
         <ContextMenu
           position={contextMenu}
-          items={[{ label: 'Paste', onClick: () => pasteAtRoot(rootDir) }]}
+          items={[
+            { label: 'Find in Folder...', onClick: () => setFindTarget(rootDir) },
+            ...(clipboard ? [{ label: 'Paste', onClick: () => pasteAtRoot(rootDir) }] : []),
+          ]}
           onClose={() => setContextMenu(null)}
         />
       )}
@@ -291,6 +296,14 @@ export function FileExplorer() {
         <UploadDialog
           entries={uploadEntries}
           onClose={handleUploadDialogClose}
+        />
+      )}
+
+      {findTarget && (
+        <FindInFolderModal
+          sessionId={activeSession.sessionId}
+          rootPath={findTarget}
+          onClose={() => setFindTarget(null)}
         />
       )}
     </div>

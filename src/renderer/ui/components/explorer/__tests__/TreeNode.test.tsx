@@ -16,6 +16,10 @@ function makeDir(name: string, path: string, children?: FileNode[]): FileNode {
   return { name, path, type: 'directory', size: 0, modifiedAt: '', permissions: 'drwxr-xr-x', isLoaded: !!children, children }
 }
 
+function makeSymlink(name: string, path: string): FileNode {
+  return { name, path, type: 'symlink', size: 0, modifiedAt: '', permissions: 'lrwxrwxrwx', isLoaded: false }
+}
+
 vi.mock('../../../../application/contexts/AppContext', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../../../application/contexts/AppContext')>()
   return { ...original, useApp: vi.fn() }
@@ -29,20 +33,23 @@ vi.mock('../../../../application/contexts/EditorContext', async (importOriginal)
 import { useApp } from '../../../../application/contexts/AppContext'
 import type { ClipboardEntry } from '../../../../application/contexts/AppContext'
 import { useEditor } from '../../../../application/contexts/EditorContext'
+import type { DownloadProgressEvent } from '../../../../domain/ports/IRemoteApi'
 
 const mockOpenFile = vi.fn()
 const mockNotify = vi.fn()
 const mockCopyToClipboard = vi.fn()
+const mockUpdateNotification = vi.fn()
 
 beforeEach(() => {
   mockApi = createMockApi()
   vi.stubGlobal('api', mockApi)
+  mockNotify.mockReturnValue('notif-1')
   vi.mocked(useApp).mockReturnValue({
     activeSession: null, connections: [], notifications: [], isConnecting: false,
     terminalTargetDir: null, clipboard: null,
     loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
     deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
-    disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(),
+    disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(), updateNotification: mockUpdateNotification,
     openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
     copyToClipboard: mockCopyToClipboard, clearClipboard: vi.fn(),
   })
@@ -59,6 +66,7 @@ afterEach(() => {
   mockOpenFile.mockReset()
   mockNotify.mockReset()
   mockCopyToClipboard.mockReset()
+  mockUpdateNotification.mockReset()
 })
 
 describe('TreeNode — file', () => {
@@ -288,8 +296,12 @@ describe('TreeNode — download', () => {
     expect(screen.getByText('Download')).toBeInTheDocument()
   })
 
-  it('downloads a file: opens save dialog with its name, then calls downloadFile', async () => {
+  it('downloads a file: opens save dialog, starts the transfer, and patches progress/success via updateNotification', async () => {
     mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\readme.md')
+    mockApi.sftp.downloadFile.mockResolvedValue({ transferId: 'transfer-1' })
+    let progressCb: ((event: DownloadProgressEvent) => void) | null = null
+    mockApi.sftp.onDownloadProgress.mockImplementation((cb) => { progressCb = cb; return () => {} })
+
     const node = makeFile('readme.md', '/readme.md')
     renderWithProviders(<TreeNode node={node} sessionId="sess-1" />)
 
@@ -302,12 +314,27 @@ describe('TreeNode — download', () => {
         'sess-1', '/readme.md', 'C:\\Users\\me\\Downloads\\readme.md'
       )
       expect(mockApi.sftp.downloadFolder).not.toHaveBeenCalled()
-      expect(mockNotify).toHaveBeenCalledWith('success', expect.stringContaining('readme.md'))
+      expect(mockNotify).toHaveBeenCalledWith('info', expect.stringContaining('readme.md'))
+      expect(mockUpdateNotification).toHaveBeenCalledWith(
+        'notif-1', expect.objectContaining({ progress: 0, status: 'downloading' })
+      )
     })
+
+    progressCb?.({ transferId: 'transfer-1', transferred: 50, total: 100, status: 'downloading' })
+    expect(mockUpdateNotification).toHaveBeenCalledWith(
+      'notif-1', expect.objectContaining({ progress: 50 })
+    )
+
+    progressCb?.({ transferId: 'transfer-1', transferred: 100, total: 100, status: 'done' })
+    expect(mockUpdateNotification).toHaveBeenCalledWith(
+      'notif-1',
+      expect.objectContaining({ type: 'success', status: 'done', message: expect.stringContaining('readme.md') })
+    )
   })
 
   it('downloads a folder: opens save dialog suggesting a .zip name, then calls downloadFolder', async () => {
     mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\src.zip')
+    mockApi.sftp.downloadFolder.mockResolvedValue({ transferId: 'transfer-2' })
     const node = makeDir('src', '/src')
     renderWithProviders(<TreeNode node={node} sessionId="sess-1" />)
 
@@ -320,7 +347,9 @@ describe('TreeNode — download', () => {
         'sess-1', '/src', 'C:\\Users\\me\\Downloads\\src.zip'
       )
       expect(mockApi.sftp.downloadFile).not.toHaveBeenCalled()
-      expect(mockNotify).toHaveBeenCalledWith('success', expect.stringContaining('src'))
+      expect(mockUpdateNotification).toHaveBeenCalledWith(
+        'notif-1', expect.objectContaining({ progress: 0, status: 'downloading' })
+      )
     })
   })
 
@@ -336,17 +365,65 @@ describe('TreeNode — download', () => {
     expect(mockApi.sftp.downloadFolder).not.toHaveBeenCalled()
   })
 
-  it('shows an error notification when the download fails', async () => {
+  it('patches an error notification when the download reports a non-cancel error', async () => {
     mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\app.ts')
-    mockApi.sftp.downloadFile.mockRejectedValue(new Error('Connection lost'))
+    mockApi.sftp.downloadFile.mockResolvedValue({ transferId: 'transfer-3' })
+    let progressCb: ((event: DownloadProgressEvent) => void) | null = null
+    mockApi.sftp.onDownloadProgress.mockImplementation((cb) => { progressCb = cb; return () => {} })
+
     renderWithProviders(<TreeNode node={makeFile('app.ts', '/app.ts')} sessionId="sess-1" />)
 
     await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('app.ts') })
     await userEvent.click(screen.getByText('Download'))
 
+    await waitFor(() => expect(progressCb).not.toBeNull())
+    progressCb?.({ transferId: 'transfer-3', transferred: 0, status: 'error', error: 'Connection lost' })
+
+    expect(mockUpdateNotification).toHaveBeenCalledWith(
+      'notif-1',
+      expect.objectContaining({ type: 'error', status: 'error', message: expect.stringContaining('Connection lost') })
+    )
+  })
+
+  it('patches a neutral cancelled notification (not an error) when the transfer reports CANCELLED', async () => {
+    mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\app.ts')
+    mockApi.sftp.downloadFile.mockResolvedValue({ transferId: 'transfer-4' })
+    let progressCb: ((event: DownloadProgressEvent) => void) | null = null
+    mockApi.sftp.onDownloadProgress.mockImplementation((cb) => { progressCb = cb; return () => {} })
+
+    renderWithProviders(<TreeNode node={makeFile('app.ts', '/app.ts')} sessionId="sess-1" />)
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('app.ts') })
+    await userEvent.click(screen.getByText('Download'))
+
+    await waitFor(() => expect(progressCb).not.toBeNull())
+    progressCb?.({ transferId: 'transfer-4', transferred: 0, status: 'cancelled' })
+
+    expect(mockUpdateNotification).toHaveBeenCalledWith(
+      'notif-1',
+      expect.objectContaining({ type: 'info', status: 'cancelled', message: expect.stringContaining('cancelled') })
+    )
+  })
+
+  it('wires the notification cancel action to api.sftp.cancelDownload with the transfer id', async () => {
+    mockApi.sftp.openSaveDialog.mockResolvedValue('C:\\Users\\me\\Downloads\\readme.md')
+    mockApi.sftp.downloadFile.mockResolvedValue({ transferId: 'transfer-42' })
+
+    renderWithProviders(<TreeNode node={makeFile('readme.md', '/readme.md')} sessionId="sess-1" />)
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('readme.md') })
+    await userEvent.click(screen.getByText('Download'))
+
     await waitFor(() => {
-      expect(mockNotify).toHaveBeenCalledWith('error', expect.stringContaining('Connection lost'))
+      expect(mockUpdateNotification).toHaveBeenCalledWith(
+        'notif-1', expect.objectContaining({ status: 'downloading' })
+      )
     })
+
+    const call = mockUpdateNotification.mock.calls.find(([, patch]) => patch.status === 'downloading')
+    call?.[1].onCancel?.()
+
+    expect(mockApi.sftp.cancelDownload).toHaveBeenCalledWith('transfer-42')
   })
 })
 
@@ -404,7 +481,7 @@ function mockUseAppValue(clipboard: ClipboardEntry | null) {
     terminalTargetDir: null, clipboard,
     loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
     deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
-    disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(),
+    disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(), updateNotification: mockUpdateNotification,
     openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
     copyToClipboard: mockCopyToClipboard, clearClipboard: vi.fn(),
   })
@@ -478,5 +555,63 @@ describe('TreeNode — copy/paste', () => {
     await waitFor(() => {
       expect(mockApi.sftp.copy).toHaveBeenLastCalledWith('sess-1', '/other.ts', '/src/other.ts', 'file', true)
     })
+  })
+})
+
+describe('TreeNode — properties', () => {
+  it('"Properties" appears as the last item in the context menu for a file', async () => {
+    renderWithProviders(<TreeNode node={makeFile('index.ts', '/index.ts')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('index.ts') })
+    const buttons = screen.getAllByRole('button')
+    expect(buttons[buttons.length - 1]).toHaveTextContent('Properties')
+  })
+
+  it('"Properties" appears as the last item in the context menu for a directory', async () => {
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    const buttons = screen.getAllByRole('button')
+    expect(buttons[buttons.length - 1]).toHaveTextContent('Properties')
+  })
+
+  it('"Properties" appears as the last item in the context menu for a symlink', async () => {
+    renderWithProviders(<TreeNode node={makeSymlink('link', '/link')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('link') })
+    const buttons = screen.getAllByRole('button')
+    expect(buttons[buttons.length - 1]).toHaveTextContent('Properties')
+  })
+
+  it('clicking "Properties" opens the modal and calls api.sftp.getFileInfo with the node path', async () => {
+    const node = makeFile('readme.md', '/docs/readme.md')
+    renderWithProviders(<TreeNode node={node} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('readme.md') })
+    await userEvent.click(screen.getByText('Properties'))
+
+    await waitFor(() => {
+      expect(mockApi.sftp.getFileInfo).toHaveBeenCalledWith('sess-1', '/docs/readme.md')
+    })
+    expect(screen.getByText('Properties')).toBeInTheDocument()
+  })
+})
+
+describe('TreeNode — find in folder', () => {
+  it('"Find in Folder..." appears in a directory context menu', async () => {
+    renderWithProviders(<TreeNode node={makeDir('src', '/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    expect(screen.getByText('Find in Folder...')).toBeInTheDocument()
+  })
+
+  it('"Find in Folder..." is absent from a file context menu', async () => {
+    renderWithProviders(<TreeNode node={makeFile('index.ts', '/index.ts')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('index.ts') })
+    expect(screen.queryByText('Find in Folder...')).not.toBeInTheDocument()
+  })
+
+  it('clicking "Find in Folder..." opens FindInFolderModal targeting the directory path', async () => {
+    renderWithProviders(<TreeNode node={makeDir('src', '/project/src')} sessionId="sess-1" />)
+    await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('src') })
+    await userEvent.click(screen.getByText('Find in Folder...'))
+
+    expect(screen.getByText('Find in Folder')).toBeInTheDocument()
+    expect(screen.getByText('/project/src')).toBeInTheDocument()
   })
 })
