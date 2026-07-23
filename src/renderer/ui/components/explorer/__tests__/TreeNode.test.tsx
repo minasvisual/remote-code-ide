@@ -47,11 +47,13 @@ beforeEach(() => {
   vi.mocked(useApp).mockReturnValue({
     activeSession: null, connections: [], notifications: [], isConnecting: false,
     terminalTargetDir: null, clipboard: null,
+    uploadBatches: [], uploadRefreshSignal: null,
     loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
     deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
     disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(), updateNotification: mockUpdateNotification,
     openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
     copyToClipboard: mockCopyToClipboard, clearClipboard: vi.fn(),
+    startUpload: vi.fn(), dismissUpload: vi.fn(),
   })
   vi.mocked(useEditor).mockReturnValue({
     tabs: [], activeTabId: null, pendingClose: null, openFile: mockOpenFile,
@@ -479,11 +481,13 @@ function mockUseAppValue(clipboard: ClipboardEntry | null) {
   vi.mocked(useApp).mockReturnValue({
     activeSession: null, connections: [], notifications: [], isConnecting: false,
     terminalTargetDir: null, clipboard,
+    uploadBatches: [], uploadRefreshSignal: null,
     loadConnections: vi.fn(), saveConnection: vi.fn(), updateConnection: vi.fn(),
     deleteConnection: vi.fn(), testConnection: vi.fn(), connect: vi.fn(),
     disconnect: vi.fn(), notify: mockNotify, dismissNotification: vi.fn(), updateNotification: mockUpdateNotification,
     openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
     copyToClipboard: mockCopyToClipboard, clearClipboard: vi.fn(),
+    startUpload: vi.fn(), dismissUpload: vi.fn(),
   })
 }
 

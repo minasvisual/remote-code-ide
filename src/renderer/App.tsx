@@ -10,6 +10,7 @@ import { MonacoWrapper } from './ui/components/editor/MonacoWrapper'
 import { WelcomeScreen } from './ui/components/editor/WelcomeScreen'
 import { TerminalPanel } from './ui/components/terminal/TerminalPanel'
 import { NotificationList } from './ui/components/commons/Notification'
+import { UploadWidget } from './ui/components/commons/UploadWidget'
 import { ExtensionsPanel } from './ui/components/extensions/ExtensionsPanel'
 import { AboutPanel } from './ui/components/about/AboutPanel'
 import { ResizeHandle } from './ui/components/commons/ResizeHandle'
@@ -116,6 +117,7 @@ function IDELayout() {
 
       <StatusBar />
       <NotificationList />
+      <UploadWidget />
     </div>
   )
 }

@@ -33,15 +33,16 @@ vi.mock('../../../../application/contexts/AppContext', async (importOriginal) =>
 
 import { useApp } from '../../../../application/contexts/AppContext'
 
-beforeEach(() => {
-  mockApi = createMockApi()
-  vi.stubGlobal('api', mockApi)
-  vi.mocked(useApp).mockReturnValue({
+function baseUseAppReturn(overrides: Partial<ReturnType<typeof useApp>> = {}): ReturnType<typeof useApp> {
+  return {
     activeSession: mockSession,
     connections: [],
     notifications: [],
     isConnecting: false,
     terminalTargetDir: null,
+    clipboard: null,
+    uploadBatches: [],
+    uploadRefreshSignal: null,
     loadConnections: vi.fn(),
     saveConnection: vi.fn(),
     updateConnection: vi.fn(),
@@ -52,9 +53,20 @@ beforeEach(() => {
     notify: vi.fn(),
     dismissNotification: vi.fn(),
     updateNotification: vi.fn(),
-    openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-    clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-  })
+    openTerminalAt: vi.fn(),
+    registerBeforeDisconnect: vi.fn(),
+    copyToClipboard: vi.fn(),
+    clearClipboard: vi.fn(),
+    startUpload: vi.fn(),
+    dismissUpload: vi.fn(),
+    ...overrides,
+  }
+}
+
+beforeEach(() => {
+  mockApi = createMockApi()
+  vi.stubGlobal('api', mockApi)
+  vi.mocked(useApp).mockReturnValue(baseUseAppReturn())
 })
 
 afterEach(() => {
@@ -92,25 +104,9 @@ describe('FileExplorer', () => {
   })
 
   it('calls sftp.listDir with initialDirectory when set on the session', async () => {
-    vi.mocked(useApp).mockReturnValue({
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({
       activeSession: { ...mockSession, initialDirectory: '/home/user/projects' },
-      connections: [],
-      notifications: [],
-      isConnecting: false,
-      terminalTargetDir: null,
-      loadConnections: vi.fn(),
-      saveConnection: vi.fn(),
-      updateConnection: vi.fn(),
-      deleteConnection: vi.fn(),
-      testConnection: vi.fn(),
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      notify: vi.fn(),
-      dismissNotification: vi.fn(),
-      updateNotification: vi.fn(),
-      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-      clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-    })
+    }))
     mockApi.sftp.listDir.mockResolvedValue([])
     renderWithProviders(<FileExplorer />)
     await waitFor(() => {
@@ -129,25 +125,11 @@ describe('FileExplorer', () => {
   it('disconnects when listDir fails and initialDirectory is set', async () => {
     const mockDisconnect = vi.fn()
     const mockNotify = vi.fn()
-    vi.mocked(useApp).mockReturnValue({
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({
       activeSession: { ...mockSession, initialDirectory: '/bad/path' },
-      connections: [],
-      notifications: [],
-      isConnecting: false,
-      loadConnections: vi.fn(),
-      saveConnection: vi.fn(),
-      updateConnection: vi.fn(),
-      deleteConnection: vi.fn(),
-      testConnection: vi.fn(),
-      connect: vi.fn(),
       disconnect: mockDisconnect,
       notify: mockNotify,
-      dismissNotification: vi.fn(),
-      updateNotification: vi.fn(),
-      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-      clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-      terminalTargetDir: null,
-    })
+    }))
     mockApi.sftp.listDir.mockRejectedValue(new Error('No such file or directory'))
     renderWithProviders(<FileExplorer />)
     await waitFor(() => {
@@ -158,25 +140,7 @@ describe('FileExplorer', () => {
 
   it('does not disconnect when listDir fails without initialDirectory', async () => {
     const mockDisconnect = vi.fn()
-    vi.mocked(useApp).mockReturnValue({
-      activeSession: mockSession,
-      connections: [],
-      notifications: [],
-      isConnecting: false,
-      loadConnections: vi.fn(),
-      saveConnection: vi.fn(),
-      updateConnection: vi.fn(),
-      deleteConnection: vi.fn(),
-      testConnection: vi.fn(),
-      connect: vi.fn(),
-      disconnect: mockDisconnect,
-      notify: vi.fn(),
-      dismissNotification: vi.fn(),
-      updateNotification: vi.fn(),
-      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-      clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-      terminalTargetDir: null,
-    })
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({ disconnect: mockDisconnect }))
     mockApi.sftp.listDir.mockRejectedValue(new Error('Permission denied'))
     renderWithProviders(<FileExplorer />)
     await waitFor(() => {
@@ -193,51 +157,48 @@ describe('FileExplorer', () => {
     })
   })
 
-  it('calls openUploadDialog with "files" when Upload Files button is clicked', async () => {
+  it('calls startUpload with the session id, root dir, and "files" when Upload Files button is clicked', async () => {
+    const mockStartUpload = vi.fn()
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({ startUpload: mockStartUpload }))
     mockApi.sftp.listDir.mockResolvedValue([])
-    mockApi.sftp.openUploadDialog.mockResolvedValue(null)
     renderWithProviders(<FileExplorer />)
     await waitFor(() => screen.getByTitle('Upload Files'))
     await userEvent.click(screen.getByTitle('Upload Files'))
     await waitFor(() => {
-      expect(mockApi.sftp.openUploadDialog).toHaveBeenCalledWith('files')
+      expect(mockStartUpload).toHaveBeenCalledWith('sess-1', '/', 'files')
     })
   })
 
-  it('does not show upload dialog when openUploadDialog returns null', async () => {
+  it('calls startUpload with "folder" when Upload Folder button is clicked', async () => {
+    const mockStartUpload = vi.fn()
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({ startUpload: mockStartUpload }))
     mockApi.sftp.listDir.mockResolvedValue([])
-    mockApi.sftp.openUploadDialog.mockResolvedValue(null)
     renderWithProviders(<FileExplorer />)
-    await waitFor(() => screen.getByTitle('Upload Files'))
-    await userEvent.click(screen.getByTitle('Upload Files'))
+    await waitFor(() => screen.getByTitle('Upload Folder'))
+    await userEvent.click(screen.getByTitle('Upload Folder'))
     await waitFor(() => {
-      expect(mockApi.sftp.uploadFiles).not.toHaveBeenCalled()
+      expect(mockStartUpload).toHaveBeenCalledWith('sess-1', '/', 'folder')
     })
-    expect(screen.queryByText('Preparing upload')).not.toBeInTheDocument()
   })
 
   it('renders nothing when there is no active session', () => {
-    vi.mocked(useApp).mockReturnValue({
-      activeSession: null,
-      connections: [],
-      notifications: [],
-      isConnecting: false,
-      terminalTargetDir: null,
-      loadConnections: vi.fn(),
-      saveConnection: vi.fn(),
-      updateConnection: vi.fn(),
-      deleteConnection: vi.fn(),
-      testConnection: vi.fn(),
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      notify: vi.fn(),
-      dismissNotification: vi.fn(),
-      updateNotification: vi.fn(),
-      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-      clipboard: null, copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-    })
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({ activeSession: null }))
     const { container } = renderWithProviders(<FileExplorer />)
     expect(container.firstChild).toBeNull()
+  })
+})
+
+describe('FileExplorer — upload refresh signal', () => {
+  it('reloads the root listing when uploadRefreshSignal targets the root dir', async () => {
+    mockApi.sftp.listDir.mockResolvedValue([])
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({ uploadRefreshSignal: null }))
+    const { rerender } = renderWithProviders(<FileExplorer />)
+    await waitFor(() => expect(mockApi.sftp.listDir).toHaveBeenCalledTimes(1))
+
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({ uploadRefreshSignal: { path: '/', tick: 1 } }))
+    rerender(<FileExplorer />)
+
+    await waitFor(() => expect(mockApi.sftp.listDir).toHaveBeenCalledTimes(2))
   })
 })
 
@@ -255,26 +216,9 @@ describe('FileExplorer — background context menu (root paste)', () => {
   })
 
   it('clicking "Find in Folder..." opens FindInFolderModal targeting the root dir', async () => {
-    vi.mocked(useApp).mockReturnValue({
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({
       activeSession: { ...mockSession, initialDirectory: '/home/user/projects' },
-      connections: [],
-      notifications: [],
-      isConnecting: false,
-      terminalTargetDir: null,
-      clipboard: null,
-      loadConnections: vi.fn(),
-      saveConnection: vi.fn(),
-      updateConnection: vi.fn(),
-      deleteConnection: vi.fn(),
-      testConnection: vi.fn(),
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      notify: vi.fn(),
-      dismissNotification: vi.fn(),
-      updateNotification: vi.fn(),
-      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-      copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-    })
+    }))
     mockApi.sftp.listDir.mockResolvedValue([])
     const { container } = renderWithProviders(<FileExplorer />)
     await waitFor(() => expect(mockApi.sftp.listDir).toHaveBeenCalled())
@@ -288,26 +232,9 @@ describe('FileExplorer — background context menu (root paste)', () => {
   })
 
   it('shows "Paste" on empty-space right-click with a clipboard entry, targeting the root dir', async () => {
-    vi.mocked(useApp).mockReturnValue({
-      activeSession: mockSession,
-      connections: [],
-      notifications: [],
-      isConnecting: false,
-      terminalTargetDir: null,
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({
       clipboard: { sessionId: 'sess-1', path: '/dir/other.ts', name: 'other.ts', type: 'file' },
-      loadConnections: vi.fn(),
-      saveConnection: vi.fn(),
-      updateConnection: vi.fn(),
-      deleteConnection: vi.fn(),
-      testConnection: vi.fn(),
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      notify: vi.fn(),
-      dismissNotification: vi.fn(),
-      updateNotification: vi.fn(),
-      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-      copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-    })
+    }))
     mockApi.sftp.listDir.mockResolvedValue([])
     const { container } = renderWithProviders(<FileExplorer />)
     await waitFor(() => expect(mockApi.sftp.listDir).toHaveBeenCalled())
@@ -323,26 +250,9 @@ describe('FileExplorer — background context menu (root paste)', () => {
   })
 
   it('right-clicking a file row does not open the background context menu', async () => {
-    vi.mocked(useApp).mockReturnValue({
-      activeSession: mockSession,
-      connections: [],
-      notifications: [],
-      isConnecting: false,
-      terminalTargetDir: null,
+    vi.mocked(useApp).mockReturnValue(baseUseAppReturn({
       clipboard: { sessionId: 'sess-1', path: '/other.ts', name: 'other.ts', type: 'file' },
-      loadConnections: vi.fn(),
-      saveConnection: vi.fn(),
-      updateConnection: vi.fn(),
-      deleteConnection: vi.fn(),
-      testConnection: vi.fn(),
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      notify: vi.fn(),
-      dismissNotification: vi.fn(),
-      updateNotification: vi.fn(),
-      openTerminalAt: vi.fn(), registerBeforeDisconnect: vi.fn(),
-      copyToClipboard: vi.fn(), clearClipboard: vi.fn(),
-    })
+    }))
     mockApi.sftp.listDir.mockResolvedValue([makeFile('readme.md', '/readme.md')])
     renderWithProviders(<FileExplorer />)
     await waitFor(() => screen.getByText('readme.md'))

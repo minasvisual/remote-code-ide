@@ -35,9 +35,13 @@ function baseUseApp() {
     openTerminalAt: vi.fn(),
     terminalTargetDir: null,
     clipboard: null,
+    uploadBatches: [],
+    uploadRefreshSignal: null,
     registerBeforeDisconnect: vi.fn(),
     copyToClipboard: vi.fn(),
     clearClipboard: vi.fn(),
+    startUpload: vi.fn(),
+    dismissUpload: vi.fn(),
   }
 }
 

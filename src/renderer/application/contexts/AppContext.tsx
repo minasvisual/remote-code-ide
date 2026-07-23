@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, ty
 import { getRemoteApi } from '../../adapters/api/WindowRemoteApi'
 import type { Connection, NewConnection } from '../../domain/entities/Connection'
 import type { ActiveSession } from '../../domain/entities/EditorTab'
+import type { UploadProgressEvent } from '../../domain/ports/IRemoteApi'
 
 export interface Notification {
   id: string
@@ -25,6 +26,23 @@ export interface ClipboardEntry {
   type: 'file' | 'directory'
 }
 
+export interface UploadEntry {
+  remoteName: string
+  status: 'pending' | 'uploading' | 'done' | 'error'
+  error?: string
+}
+
+export interface UploadBatch {
+  id: string
+  targetDir: string
+  entries: UploadEntry[]
+}
+
+interface UploadRefreshSignal {
+  path: string
+  tick: number
+}
+
 interface AppContextValue {
   connections: Connection[]
   activeSession: ActiveSession | null
@@ -32,6 +50,8 @@ interface AppContextValue {
   isConnecting: boolean
   terminalTargetDir: TerminalTarget | null
   clipboard: ClipboardEntry | null
+  uploadBatches: UploadBatch[]
+  uploadRefreshSignal: UploadRefreshSignal | null
   loadConnections(): Promise<void>
   saveConnection(conn: NewConnection): Promise<Connection>
   updateConnection(conn: Connection): Promise<Connection>
@@ -46,6 +66,8 @@ interface AppContextValue {
   registerBeforeDisconnect(cb: (sessionId: string) => Promise<boolean>): void
   copyToClipboard(entry: ClipboardEntry): void
   clearClipboard(): void
+  startUpload(sessionId: string, targetDir: string, mode: 'files' | 'folder'): Promise<void>
+  dismissUpload(batchId: string): void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -58,8 +80,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [terminalTargetDir, setTerminalTargetDir] = useState<TerminalTarget | null>(null)
   const [clipboard, setClipboard] = useState<ClipboardEntry | null>(null)
+  const [uploadBatches, setUploadBatches] = useState<UploadBatch[]>([])
+  const [uploadRefreshSignal, setUploadRefreshSignal] = useState<UploadRefreshSignal | null>(null)
   const beforeDisconnectRef = useRef<((sessionId: string) => Promise<boolean>) | null>(null)
   const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const uploadBatchPathsRef = useRef<Map<string, string[]>>(new Map())
+  const uploadProgressUnsubscribeRef = useRef<(() => void) | null>(null)
+  const uploadSignaledCompleteRef = useRef<Set<string>>(new Set())
 
   const dismissNotification = useCallback((id: string) => {
     const timer = dismissTimers.current.get(id)
@@ -200,6 +227,76 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setClipboard(null)
   }, [])
 
+  const matchLocalPathToBatch = useCallback((localPath: string): string | undefined => {
+    for (const [batchId, paths] of uploadBatchPathsRef.current) {
+      for (const p of paths) {
+        if (localPath === p || localPath.startsWith(p + '/') || localPath.startsWith(p + '\\')) {
+          return batchId
+        }
+      }
+    }
+    return undefined
+  }, [])
+
+  const ensureUploadProgressSubscription = useCallback(() => {
+    if (uploadProgressUnsubscribeRef.current) return
+    uploadProgressUnsubscribeRef.current = api.sftp.onUploadProgress((event: UploadProgressEvent) => {
+      const batchId = matchLocalPathToBatch(event.localPath)
+      if (!batchId) return
+      setUploadBatches((prev) => prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const idx = batch.entries.findIndex((e) => e.remoteName === event.remoteName)
+        const entry: UploadEntry = { remoteName: event.remoteName, status: event.status, error: event.error }
+        const entries = idx >= 0
+          ? batch.entries.map((e, i) => (i === idx ? entry : e))
+          : [...batch.entries, entry]
+        return { ...batch, entries }
+      }))
+    })
+  }, [api, matchLocalPathToBatch])
+
+  useEffect(() => {
+    return () => { uploadProgressUnsubscribeRef.current?.() }
+  }, [])
+
+  useEffect(() => {
+    for (const batch of uploadBatches) {
+      if (uploadSignaledCompleteRef.current.has(batch.id)) continue
+      if (batch.entries.length === 0) continue
+      const allSettled = batch.entries.every((e) => e.status === 'done' || e.status === 'error')
+      if (!allSettled) continue
+      uploadSignaledCompleteRef.current.add(batch.id)
+      setUploadRefreshSignal({ path: batch.targetDir, tick: Date.now() })
+    }
+  }, [uploadBatches])
+
+  const startUpload = useCallback(async (sessionId: string, targetDir: string, mode: 'files' | 'folder') => {
+    const paths = await api.sftp.openUploadDialog(mode)
+    if (!paths || paths.length === 0) return
+
+    ensureUploadProgressSubscription()
+
+    const batchId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    uploadBatchPathsRef.current.set(batchId, paths)
+    setUploadBatches((prev) => [...prev, { id: batchId, targetDir, entries: [] }])
+
+    api.sftp.uploadFiles(sessionId, targetDir, paths).catch((err: Error) => {
+      notify('error', `Upload failed: ${err.message}`)
+    })
+  }, [api, notify, ensureUploadProgressSubscription])
+
+  const dismissUpload = useCallback((batchId: string) => {
+    setUploadBatches((prev) => {
+      const batch = prev.find((b) => b.id === batchId)
+      if (!batch) return prev
+      const isInProgress = batch.entries.some((e) => e.status === 'pending' || e.status === 'uploading')
+      if (isInProgress) return prev
+      uploadBatchPathsRef.current.delete(batchId)
+      uploadSignaledCompleteRef.current.delete(batchId)
+      return prev.filter((b) => b.id !== batchId)
+    })
+  }, [])
+
   return (
     <AppContext.Provider
       value={{
@@ -209,6 +306,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isConnecting,
         terminalTargetDir,
         clipboard,
+        uploadBatches,
+        uploadRefreshSignal,
         loadConnections,
         saveConnection,
         updateConnection,
@@ -222,7 +321,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         openTerminalAt,
         registerBeforeDisconnect,
         copyToClipboard,
-        clearClipboard
+        clearClipboard,
+        startUpload,
+        dismissUpload
       }}
     >
       {children}

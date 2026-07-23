@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { TreeNode } from './TreeNode'
 import { Spinner } from '../commons/Spinner'
 import { ContextMenu } from '../commons/ContextMenu'
 import { Modal } from '../commons/Modal'
 import { Button } from '../commons/Button'
 import { NewFileDialog } from '../commons/NewFileDialog'
-import { UploadDialog } from '../commons/UploadDialog'
 import { FindInFolderModal } from './FindInFolderModal'
-import type { UploadEntry } from '../commons/UploadDialog'
 import { getRemoteApi } from '../../../adapters/api/WindowRemoteApi'
 import { useApp } from '../../../application/contexts/AppContext'
 import { usePaste } from './usePaste'
@@ -15,20 +13,16 @@ import type { FileNode } from '../../../domain/entities/FileNode'
 
 export function FileExplorer() {
   const api = getRemoteApi()
-  const { activeSession, notify, disconnect, openTerminalAt, clipboard } = useApp()
+  const { activeSession, notify, disconnect, openTerminalAt, clipboard, startUpload, uploadRefreshSignal } = useApp()
   const [rootNodes, setRootNodes] = useState<FileNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newFileTargetDir, setNewFileTargetDir] = useState<string | null>(null)
   const [newFileError, setNewFileError] = useState<string | undefined>()
   const [newFolderTargetDir, setNewFolderTargetDir] = useState<string | null>(null)
   const [newFolderError, setNewFolderError] = useState<string | undefined>()
-  const [uploadEntries, setUploadEntries] = useState<UploadEntry[]>([])
-  const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [refreshTarget, setRefreshTarget] = useState<{ path: string; tick: number } | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [findTarget, setFindTarget] = useState<string | null>(null)
-  const uploadUnsubscribeRef = useRef<(() => void) | null>(null)
-  const uploadTargetDirRef = useRef<string>('/')
 
   const load = async () => {
     if (!activeSession) return
@@ -113,46 +107,19 @@ export function FileExplorer() {
     setNewFolderError(undefined)
   }, [])
 
-  const handleUpload = useCallback(async (targetDir: string, mode: 'files' | 'folder' = 'files') => {
+  const handleUpload = useCallback((targetDir: string, mode: 'files' | 'folder' = 'files') => {
     if (!activeSession) return
-    const paths = await api.sftp.openUploadDialog(mode)
-    if (!paths || paths.length === 0) return
+    startUpload(activeSession.sessionId, targetDir, mode)
+  }, [activeSession, startUpload])
 
-    uploadTargetDirRef.current = targetDir
-    setUploadEntries([])
-    setShowUploadDialog(true)
-
-    uploadUnsubscribeRef.current?.()
-    uploadUnsubscribeRef.current = api.sftp.onUploadProgress((event) => {
-      setUploadEntries((prev) => {
-        const idx = prev.findIndex((e) => e.remoteName === event.remoteName)
-        const entry: UploadEntry = { remoteName: event.remoteName, status: event.status, error: event.error }
-        if (idx >= 0) {
-          const updated = [...prev]
-          updated[idx] = entry
-          return updated
-        }
-        return [...prev, entry]
-      })
-    })
-
-    api.sftp.uploadFiles(activeSession.sessionId, targetDir, paths).catch((err: Error) => {
-      notify('error', `Upload failed: ${err.message}`)
-    })
-  }, [activeSession, api, notify])
-
-  const handleUploadDialogClose = useCallback(() => {
-    const targetDir = uploadTargetDirRef.current
-    uploadUnsubscribeRef.current?.()
-    uploadUnsubscribeRef.current = null
-    setShowUploadDialog(false)
-    setUploadEntries([])
-    if (targetDir === '/') {
+  useEffect(() => {
+    if (!uploadRefreshSignal) return
+    if (uploadRefreshSignal.path === '/') {
       load()
     } else {
-      setRefreshTarget({ path: targetDir, tick: Date.now() })
+      setRefreshTarget({ path: uploadRefreshSignal.path, tick: uploadRefreshSignal.tick })
     }
-  }, [activeSession])
+  }, [uploadRefreshSignal?.tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRootPasted = useCallback(() => {
     load()
@@ -289,13 +256,6 @@ export function FileExplorer() {
           error={newFolderError}
           onConfirm={handleNewFolderConfirm}
           onCancel={handleNewFolderCancel}
-        />
-      )}
-
-      {showUploadDialog && (
-        <UploadDialog
-          entries={uploadEntries}
-          onClose={handleUploadDialogClose}
         />
       )}
 
