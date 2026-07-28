@@ -3,12 +3,18 @@ import type { RenderOptions } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { AppProvider } from '../../application/contexts/AppContext'
 import { EditorProvider } from '../../application/contexts/EditorContext'
+import { AiChatProvider } from '../../application/contexts/AiChatContext'
+import { ExtensionThemeProvider } from '../../application/hooks/useExtensionTheme'
 
 export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
   function Wrapper({ children }: { children: ReactElement }) {
     return (
       <AppProvider>
-        <EditorProvider>{children}</EditorProvider>
+        <EditorProvider>
+          <AiChatProvider>
+            <ExtensionThemeProvider>{children}</ExtensionThemeProvider>
+          </AiChatProvider>
+        </EditorProvider>
       </AppProvider>
     )
   }

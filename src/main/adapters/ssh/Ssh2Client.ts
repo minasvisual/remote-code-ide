@@ -1,6 +1,22 @@
 import { Client } from 'ssh2'
 import { v4 as uuidv4 } from 'uuid'
-import type { ISshClient, SshConnectConfig, TestResult } from '../../domain/ports/ISshClient'
+import type {
+  ISshClient,
+  SshConnectConfig,
+  TestResult,
+  ExecCommandOptions,
+  ExecCommandResult
+} from '../../domain/ports/ISshClient'
+
+const DEFAULT_EXEC_TIMEOUT_MS = 30_000
+const MAX_EXEC_OUTPUT_CHARS = 64 * 1024
+
+function appendCapped(current: string, chunk: string): string {
+  if (current.endsWith('\n…(truncated)')) return current
+  const combined = current + chunk
+  if (combined.length <= MAX_EXEC_OUTPUT_CHARS) return combined
+  return `${combined.slice(0, MAX_EXEC_OUTPUT_CHARS)}\n…(truncated)`
+}
 
 export class Ssh2Client implements ISshClient {
   private sessions = new Map<string, Client>()
@@ -69,6 +85,56 @@ export class Ssh2Client implements ISshClient {
 
   isConnected(sessionId: string): boolean {
     return this.sessions.has(sessionId)
+  }
+
+  async execCommand(
+    sessionId: string,
+    command: string,
+    options: ExecCommandOptions = {}
+  ): Promise<ExecCommandResult> {
+    const client = this.getClient(sessionId)
+    const timeoutMs = options.timeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS
+
+    return new Promise<ExecCommandResult>((resolve, reject) => {
+      client.exec(command, (err, stream) => {
+        if (err) {
+          reject(err)
+          return
+        }
+
+        let stdout = ''
+        let stderr = ''
+        let settled = false
+
+        const timeout = setTimeout(() => {
+          if (settled) return
+          settled = true
+          stream.destroy()
+          reject(Object.assign(new Error(`Command timed out after ${timeoutMs}ms`), { code: 'TIMEOUT' }))
+        }, timeoutMs)
+
+        stream.on('data', (chunk: Buffer) => {
+          stdout = appendCapped(stdout, chunk.toString('utf8'))
+        })
+        stream.stderr.on('data', (chunk: Buffer) => {
+          stderr = appendCapped(stderr, chunk.toString('utf8'))
+        })
+
+        stream.on('close', (code: number | null) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeout)
+          resolve({ stdout, stderr, exitCode: code ?? -1 })
+        })
+
+        stream.on('error', (streamErr: Error) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeout)
+          reject(streamErr)
+        })
+      })
+    })
   }
 
   getClient(sessionId: string): Client {

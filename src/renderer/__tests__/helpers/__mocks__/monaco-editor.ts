@@ -1,7 +1,11 @@
 export default {}
 export const editor = {
   getModel: () => null,
-  createModel: () => ({}),
+  createModel: () => ({ dispose: () => {} }),
+  createDiffEditor: () => ({
+    setModel: () => {},
+    dispose: () => {},
+  }),
 }
 export const Uri = {
   parse: (s: string) => ({ toString: () => s }),

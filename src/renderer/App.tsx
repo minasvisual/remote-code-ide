@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppProvider, useApp } from './application/contexts/AppContext'
 import { EditorProvider } from './application/contexts/EditorContext'
+import { AiChatProvider } from './application/contexts/AiChatContext'
 import { ActivityBar } from './ui/components/layout/ActivityBar'
 import { StatusBar } from './ui/components/layout/StatusBar'
 import { ConnectionManager } from './ui/components/connections/ConnectionManager'
@@ -12,10 +13,12 @@ import { TerminalPanel } from './ui/components/terminal/TerminalPanel'
 import { NotificationList } from './ui/components/commons/Notification'
 import { UploadWidget } from './ui/components/commons/UploadWidget'
 import { ExtensionsPanel } from './ui/components/extensions/ExtensionsPanel'
+import { AiChatPanel } from './ui/components/ai/AiChatPanel'
 import { AboutPanel } from './ui/components/about/AboutPanel'
 import { ResizeHandle } from './ui/components/commons/ResizeHandle'
 import { useEditor } from './application/contexts/EditorContext'
 import { useKeyboardShortcuts } from './application/hooks/useKeyboardShortcuts'
+import { ExtensionThemeProvider } from './application/hooks/useExtensionTheme'
 
 function IDELayout() {
   const { activeSession, terminalTargetDir } = useApp()
@@ -70,6 +73,8 @@ function IDELayout() {
             <AboutPanel />
           ) : sidebarView === 'extensions' ? (
             <ExtensionsPanel />
+          ) : sidebarView === 'ai-chat' ? (
+            <AiChatPanel />
           ) : sidebarView === 'connections' || !activeSession ? (
             <ConnectionManager />
           ) : (
@@ -126,7 +131,11 @@ export default function App() {
   return (
     <AppProvider>
       <EditorProvider>
-        <IDELayout />
+        <AiChatProvider>
+          <ExtensionThemeProvider>
+            <IDELayout />
+          </ExtensionThemeProvider>
+        </AiChatProvider>
       </EditorProvider>
     </AppProvider>
   )

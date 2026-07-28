@@ -7,10 +7,15 @@ import { Ssh2SftpService } from './adapters/sftp/Ssh2SftpService'
 import { TempFileManager } from './adapters/temp/TempFileManager'
 import { DownloadTransferRegistry } from './adapters/temp/DownloadTransferRegistry'
 import { SearchTransferRegistry } from './adapters/temp/SearchTransferRegistry'
+import { VsixExtensionService } from './adapters/extensions/VsixExtensionService'
+import { ElectronStoreAiProviderRepo } from './adapters/ai/ElectronStoreAiProviderRepo'
+import { AiChatServiceFactory } from './adapters/ai/AiChatServiceFactory'
 import { registerConnectionsIpc } from './infrastructure/ipc/connections.ipc'
 import { registerSshIpc } from './infrastructure/ipc/ssh.ipc'
 import { registerSftpIpc } from './infrastructure/ipc/sftp.ipc'
 import { registerTerminalIpc } from './infrastructure/ipc/terminal.ipc'
+import { registerExtensionsIpc } from './infrastructure/ipc/extensions.ipc'
+import { registerAiIpc } from './infrastructure/ipc/ai.ipc'
 
 const crypto = new SafeStorageCrypto()
 const repo = new ElectronStoreConnectionRepo(crypto)
@@ -19,6 +24,9 @@ const sftpService = new Ssh2SftpService(sshClient)
 const tempFiles = new TempFileManager()
 const downloadRegistry = new DownloadTransferRegistry()
 const searchRegistry = new SearchTransferRegistry()
+const extensionService = new VsixExtensionService()
+const aiProviderRepo = new ElectronStoreAiProviderRepo(crypto)
+const aiChatServiceFactory = new AiChatServiceFactory()
 
 function resolveIcon(): string {
   const base = app.isPackaged ? app.getAppPath() : join(__dirname, '../..')
@@ -105,6 +113,8 @@ app.whenReady().then(() => {
   registerSshIpc(sshClient, repo, crypto, tempFiles)
   registerSftpIpc(sftpService, tempFiles, downloadRegistry, searchRegistry)
   registerTerminalIpc(sshClient)
+  registerExtensionsIpc(extensionService)
+  registerAiIpc(aiProviderRepo, aiChatServiceFactory, sftpService, sshClient)
 
   createWindow()
 

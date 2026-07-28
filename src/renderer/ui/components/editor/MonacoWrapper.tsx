@@ -3,6 +3,7 @@ import Editor, { useMonaco, loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import type * as MonacoType from 'monaco-editor'
 import { useEditor } from '../../../application/contexts/EditorContext'
+import { useExtensionTheme } from '../../../application/hooks/useExtensionTheme'
 import { Spinner } from '../commons/Spinner'
 
 // Workers must be imported as ?worker so Vite bundles them as blob: URLs.
@@ -30,6 +31,7 @@ loader.config({ monaco })
 
 export function MonacoWrapper() {
   const { tabs, activeTabId, updateContent, saveActiveFile, isSaving } = useEditor()
+  const { activeThemeId } = useExtensionTheme()
   const monacoInstance = useMonaco()
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null)
   const saveActiveFileRef = useRef(saveActiveFile)
@@ -48,11 +50,16 @@ export function MonacoWrapper() {
 
   // Reuse Monaco models across tab switches to preserve undo history.
   // Guard on isLoading: the model must be created with real content, not the empty placeholder.
+  // Also re-runs on tab.content changes so external updates (an AI-applied edit to an already-open
+  // tab, or a stale model left behind by a previously closed tab) get pushed into the model instead
+  // of leaving the editor showing cached text that no longer matches EditorContext's state.
   useEffect(() => {
     if (!editorRef.current || !monacoInstance || !tab || tab.isLoading) return
 
+    const switchingTabs = prevTabIdRef.current !== tab.id
+
     // Save view state of the outgoing tab before switching.
-    if (prevTabIdRef.current && prevTabIdRef.current !== tab.id) {
+    if (switchingTabs && prevTabIdRef.current) {
       const state = editorRef.current.saveViewState()
       if (state) viewStateMap.current.set(prevTabIdRef.current, state)
     }
@@ -61,19 +68,21 @@ export function MonacoWrapper() {
     let model = monacoInstance.editor.getModel(uri)
     if (!model) {
       model = monacoInstance.editor.createModel(tab.content, tab.language, uri)
+    } else if (model.getValue() !== tab.content) {
+      model.pushEditOperations([], [{ range: model.getFullModelRange(), text: tab.content }], () => null)
     }
     if (editorRef.current.getModel()?.uri.toString() !== uri.toString()) {
       editorRef.current.setModel(model)
     }
 
-    // Restore view state of the incoming tab.
-    const savedState = viewStateMap.current.get(tab.id)
-    if (savedState) {
-      editorRef.current.restoreViewState(savedState)
+    // Restore view state of the incoming tab (only on an actual switch, not a content sync).
+    if (switchingTabs) {
+      const savedState = viewStateMap.current.get(tab.id)
+      if (savedState) editorRef.current.restoreViewState(savedState)
     }
 
     prevTabIdRef.current = tab.id
-  }, [tab?.id, tab?.isLoading, monacoInstance])
+  }, [tab?.id, tab?.content, tab?.isLoading, monacoInstance])
 
   const handleMount = useCallback(
     (editor: MonacoType.editor.IStandaloneCodeEditor, monacoArg: typeof MonacoType) => {
@@ -101,7 +110,7 @@ export function MonacoWrapper() {
     <div className="relative w-full h-full">
       <Editor
         height="100%"
-        theme="vs-dark"
+        theme={activeThemeId}
         defaultValue=""
         onMount={handleMount}
         onChange={handleChange}

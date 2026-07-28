@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IRemoteApi, UploadProgressEvent, DownloadProgressEvent, SearchProgressEvent } from '../renderer/domain/ports/IRemoteApi'
+import type {
+  IRemoteApi,
+  UploadProgressEvent,
+  DownloadProgressEvent,
+  SearchProgressEvent,
+  AiChatChunkEvent,
+  AiToolCallPendingEvent,
+  AiToolCallResultEvent
+} from '../renderer/domain/ports/IRemoteApi'
 
 const api: IRemoteApi = {
   connections: {
@@ -88,6 +96,92 @@ const api: IRemoteApi = {
     close: (termId) => ipcRenderer.invoke('terminal:close', termId),
     onOutput: (cb) => {
       ipcRenderer.on('terminal:output', (_e, termId, data) => cb(termId, data))
+    }
+  },
+  extensions: {
+    install: async (namespace, name, version) => {
+      const result = await ipcRenderer.invoke('extensions:install', namespace, name, version)
+      if (!result.success) throw new Error(result.error)
+      return result.data
+    },
+    list: async () => {
+      const result = await ipcRenderer.invoke('extensions:list')
+      if (!result.success) throw new Error(result.error)
+      return result.data
+    },
+    uninstall: async (id) => {
+      const result = await ipcRenderer.invoke('extensions:uninstall', id)
+      if (!result.success) throw new Error(result.error)
+    },
+    setEnabled: async (id, enabled) => {
+      const result = await ipcRenderer.invoke('extensions:setEnabled', id, enabled)
+      if (!result.success) throw new Error(result.error)
+      return result.data
+    },
+    readThemeFile: async (id) => {
+      const result = await ipcRenderer.invoke('extensions:readThemeFile', id)
+      if (!result.success) throw new Error(result.error)
+      return result.data
+    }
+  },
+  ai: {
+    providers: {
+      list: async () => {
+        const result = await ipcRenderer.invoke('ai:providers:list')
+        if (!result.success) throw new Error(result.error)
+        return result.data
+      },
+      save: async (config) => {
+        const result = await ipcRenderer.invoke('ai:providers:save', config)
+        if (!result.success) throw new Error(result.error)
+        return result.data
+      },
+      update: async (config) => {
+        const result = await ipcRenderer.invoke('ai:providers:update', config)
+        if (!result.success) throw new Error(result.error)
+        return result.data
+      },
+      delete: async (id) => {
+        const result = await ipcRenderer.invoke('ai:providers:delete', id)
+        if (!result.success) throw new Error(result.error)
+      },
+      setDefault: async (id) => {
+        const result = await ipcRenderer.invoke('ai:providers:setDefault', id)
+        if (!result.success) throw new Error(result.error)
+      },
+      test: async (config) => {
+        const result = await ipcRenderer.invoke('ai:providers:test', config)
+        return result.success
+          ? { success: true, message: 'Connection successful' }
+          : { success: false, message: result.error }
+      },
+      supportsTools: async () => {
+        const result = await ipcRenderer.invoke('ai:providers:supportsTools')
+        if (!result.success) throw new Error(result.error)
+        return result.data
+      }
+    },
+    chat: {
+      send: async (messages, fileContext, agentOptions) =>
+        ipcRenderer.invoke('ai:chat:send', messages, fileContext, agentOptions),
+      onChunk: (callback) => {
+        const listener = (_e: Electron.IpcRendererEvent, event: AiChatChunkEvent) => callback(event)
+        ipcRenderer.on('ai:chat:chunk', listener)
+        return () => ipcRenderer.removeListener('ai:chat:chunk', listener)
+      },
+      cancel: (chatId) => ipcRenderer.invoke('ai:chat:cancel', chatId),
+      onToolCallPending: (callback) => {
+        const listener = (_e: Electron.IpcRendererEvent, event: AiToolCallPendingEvent) => callback(event)
+        ipcRenderer.on('ai:chat:toolCallPending', listener)
+        return () => ipcRenderer.removeListener('ai:chat:toolCallPending', listener)
+      },
+      onToolCallResult: (callback) => {
+        const listener = (_e: Electron.IpcRendererEvent, event: AiToolCallResultEvent) => callback(event)
+        ipcRenderer.on('ai:chat:toolCallResult', listener)
+        return () => ipcRenderer.removeListener('ai:chat:toolCallResult', listener)
+      },
+      approveTool: (callId) => ipcRenderer.invoke('ai:chat:approveTool', callId),
+      denyTool: (callId) => ipcRenderer.invoke('ai:chat:denyTool', callId)
     }
   },
   versions: {

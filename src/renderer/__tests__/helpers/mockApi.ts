@@ -1,6 +1,38 @@
 import { vi } from 'vitest'
 import type { IRemoteApi } from '../../domain/ports/IRemoteApi'
 import type { Connection } from '../../domain/entities/Connection'
+import type { InstalledExtension } from '../../domain/entities/InstalledExtension'
+import type { AiProviderConfig } from '../../domain/entities/AiProviderConfig'
+
+export function createMockInstalledExtension(
+  overrides: Partial<InstalledExtension> = {}
+): InstalledExtension {
+  return {
+    id: 'publisher.ext',
+    namespace: 'publisher',
+    name: 'ext',
+    version: '1.0.0',
+    displayName: 'Test Extension',
+    enabled: false,
+    hasBasicModeContribution: true,
+    installDir: '/userData/extensions/publisher.ext-1.0.0',
+    themeFile: './themes/dark.json',
+    ...overrides,
+  }
+}
+
+export function createMockAiProviderConfig(overrides: Partial<AiProviderConfig> = {}): AiProviderConfig {
+  return {
+    id: 'provider-1',
+    label: 'Test Provider',
+    providerType: 'anthropic',
+    baseUrl: undefined,
+    model: 'claude-sonnet-4-5',
+    hasApiKey: true,
+    isDefault: true,
+    ...overrides,
+  }
+}
 
 export function createMockConnection(overrides: Partial<Connection> = {}): Connection {
   return {
@@ -69,6 +101,33 @@ export function createMockApi(): IRemoteApi {
       resize: vi.fn(),
       close: vi.fn().mockResolvedValue(undefined),
       onOutput: vi.fn(),
+    },
+    extensions: {
+      install: vi.fn().mockResolvedValue(createMockInstalledExtension()),
+      list: vi.fn().mockResolvedValue([]),
+      uninstall: vi.fn().mockResolvedValue(undefined),
+      setEnabled: vi.fn().mockResolvedValue(createMockInstalledExtension({ enabled: true })),
+      readThemeFile: vi.fn().mockResolvedValue(JSON.stringify({ type: 'dark', colors: {} })),
+    },
+    ai: {
+      providers: {
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue(createMockAiProviderConfig()),
+        update: vi.fn().mockResolvedValue(createMockAiProviderConfig()),
+        delete: vi.fn().mockResolvedValue(undefined),
+        setDefault: vi.fn().mockResolvedValue(undefined),
+        test: vi.fn().mockResolvedValue({ success: true, message: 'Connection successful' }),
+        supportsTools: vi.fn().mockResolvedValue(true),
+      },
+      chat: {
+        send: vi.fn().mockResolvedValue({ chatId: 'chat-1' }),
+        onChunk: vi.fn().mockReturnValue(() => {}),
+        cancel: vi.fn().mockResolvedValue(undefined),
+        onToolCallPending: vi.fn().mockReturnValue(() => {}),
+        onToolCallResult: vi.fn().mockReturnValue(() => {}),
+        approveTool: vi.fn().mockResolvedValue(undefined),
+        denyTool: vi.fn().mockResolvedValue(undefined),
+      },
     },
     versions: {
       node: '20.0.0',

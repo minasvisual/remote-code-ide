@@ -15,7 +15,9 @@ function InfoIcon() {
 
 const topItems = [
   { id: 'explorer', icon: '📁', title: 'Explorer' },
-  { id: 'connections', icon: '⚡', title: 'Connections' }
+  { id: 'connections', icon: '⚡', title: 'Connections' },
+  { id: 'extensions', icon: '🧩', title: 'Extensions' },
+  { id: 'ai-chat', icon: '🤖', title: 'AI Chat' }
 ]
 
 const bottomItems = [
