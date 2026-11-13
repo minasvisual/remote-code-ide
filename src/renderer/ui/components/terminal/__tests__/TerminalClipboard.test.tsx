@@ -257,6 +257,21 @@ describe('Terminal context menu', () => {
     })
   })
 
+  it('clamps the menu position when triggered near the bottom of a fully scrolled terminal', () => {
+    vi.stubGlobal('innerWidth', 1024)
+    vi.stubGlobal('innerHeight', 768)
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 140, height: 72, top: 0, left: 0, right: 140, bottom: 72, x: 0, y: 0, toJSON: () => {},
+    })
+    renderTerminal()
+    const container = screen.getByText('Opening terminal…').parentElement!
+
+    fireEvent.contextMenu(container, { clientX: 100, clientY: 760 })
+
+    const menu = screen.getByText('Copy').closest('div') as HTMLDivElement
+    expect(Number(menu.style.top.replace('px', ''))).toBeLessThanOrEqual(768 - 72 - 4)
+  })
+
   it('refocuses terminal after context menu action', async () => {
     renderTerminal()
     mockTerminalInstance.getSelection.mockReturnValue('text')

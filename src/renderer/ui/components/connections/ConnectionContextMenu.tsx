@@ -1,8 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import type { Connection } from '../../../domain/entities/Connection'
-
-const MENU_WIDTH = 140
-const MENU_HEIGHT = 72
+import { useClampedMenuPosition } from '../commons/useClampedMenuPosition'
 
 interface Props {
   x: number
@@ -14,10 +12,7 @@ interface Props {
 }
 
 export function ConnectionContextMenu({ x, y, connection: _connection, onEdit, onDelete, onClose }: Props) {
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  const clampedX = Math.min(x, window.innerWidth - MENU_WIDTH - 4)
-  const clampedY = Math.min(y, window.innerHeight - MENU_HEIGHT - 4)
+  const { ref: menuRef, style } = useClampedMenuPosition(x, y)
 
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
@@ -40,7 +35,7 @@ export function ConnectionContextMenu({ x, y, connection: _connection, onEdit, o
   return (
     <div
       ref={menuRef}
-      style={{ position: 'fixed', top: clampedY, left: clampedX, zIndex: 1000 }}
+      style={{ ...style, zIndex: 1000 }}
       className="w-36 bg-ide-sidebar border border-ide-border rounded shadow-lg py-1 text-sm text-ide-text"
     >
       <button

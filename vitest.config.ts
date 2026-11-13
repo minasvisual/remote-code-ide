@@ -6,6 +6,9 @@ const monacoStub = resolve(__dirname, 'src/renderer/__tests__/helpers/__mocks__/
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify('0.0.0-test'),
+  },
   test: {
     environment: 'jsdom',
     environmentMatchGlobs: [['src/main/**', 'node']],

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
+import { useClampedMenuPosition } from '../commons/useClampedMenuPosition'
 
 interface Props {
   x: number
@@ -10,7 +11,7 @@ interface Props {
 }
 
 export function TerminalContextMenu({ x, y, hasSelection, onCopy, onPaste, onDismiss }: Props) {
-  const menuRef = useRef<HTMLDivElement>(null)
+  const { ref: menuRef, style } = useClampedMenuPosition(x, y)
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -37,7 +38,7 @@ export function TerminalContextMenu({ x, y, hasSelection, onCopy, onPaste, onDis
     <div
       ref={menuRef}
       className="fixed z-50 min-w-[140px] py-1 bg-ide-sidebar border border-ide-border rounded shadow-lg"
-      style={{ left: x, top: y }}
+      style={style}
     >
       <button
         className={`w-full px-3 py-1.5 text-left text-sm flex items-center justify-between ${

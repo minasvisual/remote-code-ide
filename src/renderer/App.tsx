@@ -58,6 +58,13 @@ function IDELayout() {
 
   const hasActiveFile = tabs.some((t) => t.id === activeTabId)
 
+  const activePanel: 'about' | 'extensions' | 'ai-chat' | 'connections' | 'explorer' =
+    sidebarView === 'about' ? 'about'
+    : sidebarView === 'extensions' ? 'extensions'
+    : sidebarView === 'ai-chat' ? 'ai-chat'
+    : sidebarView === 'connections' || !activeSession ? 'connections'
+    : 'explorer'
+
   return (
     <div className="flex flex-col h-screen bg-ide-bg text-ide-text font-mono overflow-hidden">
       <div className="flex flex-1 overflow-hidden">
@@ -69,17 +76,21 @@ function IDELayout() {
           className="bg-ide-sidebar border-r border-ide-border shrink-0 flex flex-col overflow-hidden"
           style={{ width: sidebarWidth }}
         >
-          {sidebarView === 'about' ? (
+          <div className={activePanel === 'about' ? 'contents' : 'hidden'}>
             <AboutPanel />
-          ) : sidebarView === 'extensions' ? (
+          </div>
+          <div className={activePanel === 'extensions' ? 'contents' : 'hidden'}>
             <ExtensionsPanel />
-          ) : sidebarView === 'ai-chat' ? (
+          </div>
+          <div className={activePanel === 'ai-chat' ? 'contents' : 'hidden'}>
             <AiChatPanel />
-          ) : sidebarView === 'connections' || !activeSession ? (
+          </div>
+          <div className={activePanel === 'connections' ? 'contents' : 'hidden'}>
             <ConnectionManager />
-          ) : (
+          </div>
+          <div className={activePanel === 'explorer' ? 'contents' : 'hidden'}>
             <FileExplorer />
-          )}
+          </div>
         </div>
 
         {/* Sidebar Resize Handle */}
